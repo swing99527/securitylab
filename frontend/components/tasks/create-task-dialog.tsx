@@ -165,7 +165,7 @@ export function CreateTaskDialog() {
         config.count = 4
         config.timeout = 1
       } else if (formData.taskType === "nmap_scan") {
-        if (!formData.targetIp || !formData.targetIp.trim()) {
+        if (!formData.target || !formData.target.trim()) {
           toast({
             title: "缺少必填项",
             description: "请输入目标IP地址或网段",
@@ -173,9 +173,17 @@ export function CreateTaskDialog() {
           })
           return
         }
-        config.target = formData.targetIp.trim()
-        config.ports = formData.portRange
-        config.scan_type = formData.scanTemplate
+        config.target = formData.target.trim()
+        config.scanType = formData.scanType || 'quick'
+
+        // Only include optional fields if custom scan
+        if (formData.scanType === 'custom') {
+          if (formData.ports) {
+            config.ports = formData.ports
+          }
+          config.serviceDetection = formData.serviceDetection || false
+          config.osDetection = formData.osDetection || false
+        }
       }
 
       console.log('📦 Task config:', config)
