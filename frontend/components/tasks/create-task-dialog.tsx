@@ -84,10 +84,18 @@ export function CreateTaskDialog() {
     name: "",
     projectId: "",
     sampleId: "",
-    taskType: "ping_scan",
+    taskType: "",
     description: "",
-    // Network scan config
+    // Ping scan config
     targetIp: "",
+    count: 4,
+    // Nmap scan config
+    target: "",
+    scanType: "quick",
+    ports: "",
+    serviceDetection: false,
+    osDetection: false,
+    // Old nmap fields (keep for compatibility)
     portRange: "1-65535",
     scanTemplate: "standard",
     // Vulnerability scan config
