@@ -1,0 +1,144 @@
+version: '3.8'
+
+services:
+  # ========== PostgreSQL Database ==========
+  postgres:
+    image: postgres:15-alpine
+    container_name: iot-postgres
+    environment:
+      POSTGRES_DB: iot_security_db
+      POSTGRES_USER: iot_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me_in_production}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot_user -d iot_security_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ========== Redis Cache ==========
+  redis:
+    image: redis:7-alpine
+    container_name: iot-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_password_123}
+    ports:
+      - "6379:6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "--raw", "incr", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ========== MinIO Object Storage ==========
+  minio:
+    image: minio/minio:latest
+    container_name: iot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ========== Gotenberg PDF Generator (Optional) ==========
+  gotenberg:
+    image: gotenberg/gotenberg:7
+    container_name: iot-gotenberg
+    command:
+      - "gotenberg"
+      - "--api-timeout=60s"
+      - "--api-port=3000"
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ========== Backend Service (Optional - for Docker deployment) ==========
+  # Uncomment this section if you want to run the backend in Docker
+  # For local development, run: poetry run uvicorn app.main:app --reload
+  
+  # backend:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: iot-backend
+  #   ports:
+  #     - "8000:8000"
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://iot_user:${POSTGRES_PASSWORD:-secure_password_change_me_in_production}@postgres/iot_security_db
+  #     - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_password_123}@redis:6379/0
+  #     - MINIO_ENDPOINT=minio:9000
+  #     - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+  #     - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+  #     - MINIO_BUCKET=iot-files
+  #     - MINIO_USE_SSL=false
+  #     - JWT_SECRET=${JWT_SECRET:-change_this_secret_key_in_production_min_32_characters}
+  #     - ENVIRONMENT=production
+  #   volumes:
+  #     - ./uploads:/app/uploads
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     redis:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_started
+  #   command: uvicorn app.main:app --host 0.0.0.0 --port 8000
+  #   networks:
+  #     - iot-network
+  #   restart: unless-stopped
+
+  # ========== Celery Worker (Optional - for background tasks) ==========
+  # Uncomment when you need async task processing
+  
+  # celery-worker:
+  #   build:
+  #     context: .
+  #     dockerfile: Dockerfile
+  #   container_name: iot-celery-worker
+  #   command: celery -A app.celery_app worker --loglevel=info
+  #   environment:
+  #     - DATABASE_URL=postgresql+asyncpg://iot_user:${POSTGRES_PASSWORD}@postgres/iot_security_db
+  #     - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379/0
+  #     - CELERY_BROKER_URL=redis://:${REDIS_PASSWORD}@redis:6379/1
+  #     - CELERY_RESULT_BACKEND=redis://:${REDIS_PASSWORD}@redis:6379/2
+  #   depends_on:
+  #     - postgres
+  #     - redis
+  #   networks:
+  #     - iot-network
+  #   restart: unless-stopped
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+
+networks:
+  iot-network:
+    driver: bridge

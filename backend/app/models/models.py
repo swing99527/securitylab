@@ -1,0 +1,238 @@
+"""
+Database models for IoT Security Testing Platform
+"""
+from sqlalchemy import Column, String, Integer, DateTime, Date, ForeignKey, Text, Numeric, CheckConstraint, Index
+from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy.sql import func
+from sqlalchemy.orm import relationship
+import uuid
+from app.core.database import Base
+
+class User(Base):
+    """User model"""
+    __tablename__ = "users"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    email = Column(String(255), unique=True, nullable=False, index=True)
+    password_hash = Column(String(255), nullable=False)
+    name = Column(String(100), nullable=False)
+    role = Column(String(20), nullable=False, server_default="engineer")
+    department = Column(String(100))
+    avatar = Column(String(500))
+    status = Column(String(20), nullable=False, server_default="active")
+    last_login_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    __table_args__ = (
+        CheckConstraint(
+            "role IN ('admin', 'director', 'manager', 'engineer', 'reviewer', 'signer', 'sample_admin', 'client')",
+            name="chk_user_role"
+        ),
+        CheckConstraint(
+            "status IN ('active', 'inactive', 'locked')",
+            name="chk_user_status"
+        ),
+        Index("idx_users_role", "role"),
+    )
+
+class Project(Base):
+    """Project model"""
+    __tablename__ = "projects"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    client = Column(String(200), nullable=False)
+    standard = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, server_default="pending")
+    progress = Column(Integer, server_default="0")
+    manager_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    deadline = Column(Date)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    manager = relationship("User", foreign_keys=[manager_id])
+    samples = relationship("Sample", back_populates="project")
+    tasks = relationship("Task", back_populates="project")
+    reports = relationship("Report", back_populates="project")
+    
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('pending', 'in_progress', 'review', 'completed', 'archived')",
+            name="chk_project_status"
+        ),
+    )
+
+class Sample(Base):
+    """Sample model"""
+    __tablename__ = "samples"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    model = Column(String(100))
+    manufacturer = Column(String(200))
+    status = Column(String(20), nullable=False, server_default="in_stock")
+    location = Column(String(100))  # Made nullable
+    qr_code_url = Column(String(500))
+    notes = Column(Text)  # Added notes field
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id"))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", back_populates="samples")
+    
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('in_stock', 'in_use', 'returned', 'scrapped')",
+            name="chk_sample_status"
+        ),
+    )
+
+class Task(Base):
+    """Task model"""
+    __tablename__ = "tasks"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(50), unique=True, nullable=False)
+    name = Column(String(200), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    sample_id = Column(UUID(as_uuid=True), ForeignKey("samples.id", ondelete="SET NULL"))
+    type = Column(String(50), nullable=False)
+    status = Column(String(20), nullable=False, server_default="queued")
+    priority = Column(String(20), server_default="medium")
+    progress = Column(Integer, server_default="0")
+    config = Column(JSONB)
+    notes = Column(Text)
+    assignee_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    celery_task_id = Column(String(255))
+    start_time = Column(DateTime(timezone=True))
+    end_time = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", back_populates="tasks")
+    sample = relationship("Sample", backref="tasks")
+    assignee = relationship("User", foreign_keys=[assignee_id])
+    scan_results = relationship("ScanResult", back_populates="task")
+    vulnerabilities = relationship("Vulnerability", back_populates="task")
+    
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('queued', 'running', 'paused', 'completed', 'failed', 'cancelled')",
+            name="chk_task_status"
+        ),
+        CheckConstraint(
+            "type IN ('nmap_scan', 'vuln_scan', 'firmware_analysis', 'fuzzing', 'pentest')",
+            name="chk_task_type"
+        ),
+        CheckConstraint(
+            "priority IN ('low', 'medium', 'high', 'urgent')",
+            name="chk_task_priority"
+        ),
+        Index("idx_tasks_project", "project_id"),
+        Index("idx_tasks_status", "status"),
+        Index("idx_tasks_sample", "sample_id"),
+    )
+
+class ScanResult(Base):
+    """Scan result model"""
+    __tablename__ = "scan_results"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    scan_type = Column(String(50), nullable=False)
+    target = Column(String(255))
+    result = Column(JSONB, nullable=False)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    task = relationship("Task", back_populates="scan_results")
+    
+    __table_args__ = (
+        Index("idx_scan_result_task", "task_id"),
+        Index("idx_scan_result_jsonb", "result", postgresql_using="gin"),
+    )
+
+class Vulnerability(Base):
+    """Vulnerability model"""
+    __tablename__ = "vulnerabilities"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
+    name = Column(String(300), nullable=False)
+    severity = Column(String(20), nullable=False)
+    status = Column(String(20), server_default="open")
+    cve = Column(String(50))
+    cvss_score = Column(Numeric(3, 1))
+    description = Column(Text)
+    evidence = Column(JSONB)
+    discovered_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    task = relationship("Task", back_populates="vulnerabilities")
+    
+    __table_args__ = (
+        CheckConstraint(
+            "severity IN ('critical', 'high', 'medium', 'low', 'info')",
+            name="chk_vuln_severity"
+        ),
+    )
+
+class AuditLog(Base):
+    """Audit log model"""
+    __tablename__ = "audit_logs"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    user_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    action = Column(String(100), nullable=False)
+    resource_type = Column(String(50))
+    resource_id = Column(UUID(as_uuid=True))
+    ip_address = Column(String(45))
+    user_agent = Column(String(500))
+    details = Column(JSONB)
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    
+    # Relationships
+    user = relationship("User")
+    
+    __table_args__ = (
+        Index("idx_audit_user", "user_id"),
+        Index("idx_audit_created", "created_at"),
+    )
+
+class Report(Base):
+    """Report model"""
+    __tablename__ = "reports"
+    
+    id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    code = Column(String(50), unique=True, nullable=False)
+    title = Column(String(200), nullable=False)
+    project_id = Column(UUID(as_uuid=True), ForeignKey("projects.id", ondelete="CASCADE"), nullable=False)
+    version = Column(String(20), server_default="v1.0")
+    status = Column(String(20), nullable=False, server_default="draft")
+    content = Column(JSONB)  # Structured report content
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    reviewer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    approved_at = Column(DateTime(timezone=True))
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
+    
+    # Relationships
+    project = relationship("Project", back_populates="reports")
+    author = relationship("User", foreign_keys=[author_id])
+    reviewer = relationship("User", foreign_keys=[reviewer_id])
+    
+    __table_args__ = (
+        CheckConstraint(
+            "status IN ('draft', 'pending_review', 'approved', 'rejected', 'signed')",
+            name="chk_report_status"
+        ),
+        Index("idx_reports_project", "project_id"),
+        Index("idx_reports_status", "status"),
+        Index("idx_reports_code", "code"),
+    )
