@@ -352,6 +352,113 @@ export function CreateTaskDialog() {
                 </div>
               )}
 
+              {/* Ping Scan配置 */}
+              {formData.taskType === 'ping_scan' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="targetIp">目标IP/域名 *</Label>
+                    <Input
+                      id="targetIp"
+                      placeholder="例如: baidu.com 或 192.168.1.1"
+                      value={formData.targetIp || ''}
+                      onChange={(e) => setFormData({ ...formData, targetIp: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="count">Ping次数</Label>
+                    <Input
+                      id="count"
+                      type="number"
+                      min="1"
+                      max="10"
+                      value={formData.count || 4}
+                      onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) })}
+                    />
+                  </div>
+                </div>
+              )}
+
+              {/* Nmap Scan配置 */}
+              {formData.taskType === 'nmap_scan' && (
+                <div className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="nmapTarget">目标IP/域名 *</Label>
+                    <Input
+                      id="nmapTarget"
+                      placeholder="例如: 192.168.1.1 或 example.com"
+                      value={formData.target || ''}
+                      onChange={(e) => setFormData({ ...formData, target: e.target.value })}
+                    />
+                  </div>
+
+                  <div className="space-y-2">
+                    <Label htmlFor="scanType">扫描类型</Label>
+                    <Select
+                      value={formData.scanType || 'quick'}
+                      onValueChange={(value) => setFormData({ ...formData, scanType: value })}
+                    >
+                      <SelectTrigger id="scanType">
+                        <SelectValue placeholder="选择扫描类型" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="quick">快速扫描 (Top 100端口)</SelectItem>
+                        <SelectItem value="full">完整扫描 (所有65535端口)</SelectItem>
+                        <SelectItem value="custom">自定义扫描</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      {formData.scanType === 'quick' && '扫描常用的100个端口，速度快'}
+                      {formData.scanType === 'full' && '扫描所有端口，耗时较长'}
+                      {formData.scanType === 'custom' && '自定义扫描范围和选项'}
+                    </p>
+                  </div>
+
+                  {formData.scanType === 'custom' && (
+                    <>
+                      <div className="space-y-2">
+                        <Label htmlFor="ports">端口范围</Label>
+                        <Input
+                          id="ports"
+                          placeholder="例如: 1-1000 或 80,443,8080"
+                          value={formData.ports || ''}
+                          onChange={(e) => setFormData({ ...formData, ports: e.target.value })}
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          支持范围(1-1000)、列表(80,443)或组合
+                        </p>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="serviceDetection"
+                          checked={formData.serviceDetection || false}
+                          onChange={(e) => setFormData({ ...formData, serviceDetection: e.target.checked })}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor="serviceDetection" className="font-normal cursor-pointer">
+                          服务版本检测 (-sV)
+                        </Label>
+                      </div>
+
+                      <div className="flex items-center space-x-2">
+                        <input
+                          type="checkbox"
+                          id="osDetection"
+                          checked={formData.osDetection || false}
+                          onChange={(e) => setFormData({ ...formData, osDetection: e.target.checked })}
+                          className="rounded border-gray-300"
+                        />
+                        <Label htmlFor="osDetection" className="font-normal cursor-pointer">
+                          操作系统检测 (-O, 需要root权限)
+                        </Label>
+                      </div>
+                    </>
+                  )}
+                </div>
+              )}
+
               {formData.taskType === "nmap_scan" && (
                 <div className="space-y-3">
                   <div className="space-y-2">
