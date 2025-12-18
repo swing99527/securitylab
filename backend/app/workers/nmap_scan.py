@@ -22,10 +22,13 @@ def nmap_scan_worker(
         task_id: 任务ID
         params: 参数字典，包含:
             - target: 目标IP或域名
-            - scanType: 扫描类型 (quick/full/custom)
+            - scanType: 扫描类型 (quick/full/stealth/custom)
             - ports: 端口范围 (custom时有效)
+            - timing: 扫描速度 T0-T5 (custom时有效)
             - serviceDetection: 是否检测服务版本
             - osDetection: 是否检测操作系统
+            - verboseOutput: 是否详细输出
+            - skipHostDiscovery: 是否禁用主机发现
         progress_callback: 进度回调函数
         
     Returns:
@@ -144,8 +147,14 @@ def _build_nmap_args(params: Dict[str, Any]) -> str:
         # 完整扫描：所有端口 + 服务检测
         args = '-T4 -p- -sV'
         
+    elif scan_type == 'stealth':
+        # 隐蔽扫描：SYN扫描（不完成TCP连接）
+        args = '-sS -T2'
+        
     else:  # custom
-        args = '-T4'
+        # 获取速度参数
+        timing = params.get('timing', 'T4')
+        args = f'-{timing}'
         
         # 自定义端口
         if params.get('ports'):
@@ -160,8 +169,16 @@ def _build_nmap_args(params: Dict[str, Any]) -> str:
         # OS检测
         if params.get('osDetection'):
             args += ' -O'
+        
+        # 详细输出
+        if params.get('verboseOutput'):
+            args += ' -v'
+        
+        # 禁用主机发现（对防火墙后的主机有用）
+        if params.get('skipHostDiscovery'):
+            args += ' -Pn'
             
-        # 激进扫描
+        # 激进扫描 (legacy support)
         if params.get('aggressiveScan'):
             args += ' -A'
     

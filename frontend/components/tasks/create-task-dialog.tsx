@@ -93,8 +93,11 @@ export function CreateTaskDialog() {
     target: "",
     scanType: "quick",
     ports: "",
+    timing: "T4",
     serviceDetection: false,
     osDetection: false,
+    verboseOutput: false,
+    skipHostDiscovery: false,
     // Old nmap fields (keep for compatibility)
     portRange: "1-65535",
     scanTemplate: "standard",
@@ -104,7 +107,7 @@ export function CreateTaskDialog() {
     firmwareFile: null as File | null,
     // Fuzzing config
     fuzzProtocol: "",
-    fuzzTimeout: "30",
+    fuzzTimeout: "60",
     fuzzIterations: "10000",
   })
 
@@ -168,7 +171,7 @@ export function CreateTaskDialog() {
         if (!formData.target || !formData.target.trim()) {
           toast({
             title: "缺少必填项",
-            description: "请输入目标IP地址或网段",
+            description: "请输入扫描目标",
             variant: "destructive",
           })
           return
@@ -181,8 +184,11 @@ export function CreateTaskDialog() {
           if (formData.ports) {
             config.ports = formData.ports
           }
+          config.timing = formData.timing || 'T4'
           config.serviceDetection = formData.serviceDetection || false
           config.osDetection = formData.osDetection || false
+          config.verboseOutput = formData.verboseOutput || false
+          config.skipHostDiscovery = formData.skipHostDiscovery || false
         }
       }
 
@@ -399,13 +405,16 @@ export function CreateTaskDialog() {
               {formData.taskType === 'nmap_scan' && (
                 <div className="space-y-4">
                   <div className="space-y-2">
-                    <Label htmlFor="nmapTarget">目标IP/域名 *</Label>
+                    <Label htmlFor="nmapTarget">扫描目标 *</Label>
                     <Input
                       id="nmapTarget"
-                      placeholder="例如: 192.168.1.1 或 example.com"
+                      placeholder="支持: IP(192.168.1.1) | 网段(192.168.1.0/24) | 域名(example.com) | 范围(192.168.1.1-50)"
                       value={formData.target || ''}
                       onChange={(e) => setFormData({ ...formData, target: e.target.value })}
                     />
+                    <p className="text-xs text-muted-foreground">
+                      支持单IP、CIDR网段、IP范围或域名，多个目标用空格分隔
+                    </p>
                   </div>
 
                   <div className="space-y-2">
@@ -418,15 +427,17 @@ export function CreateTaskDialog() {
                         <SelectValue placeholder="选择扫描类型" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="quick">快速扫描 (Top 100端口)</SelectItem>
-                        <SelectItem value="full">完整扫描 (所有65535端口)</SelectItem>
-                        <SelectItem value="custom">自定义扫描</SelectItem>
+                        <SelectItem value="quick">快速发现 (Top 100端口，~30秒)</SelectItem>
+                        <SelectItem value="full">完整审计 (全部65535端口 + 服务检测，10-30分钟)</SelectItem>
+                        <SelectItem value="stealth">隐蔽扫描 (SYN扫描，规避检测)</SelectItem>
+                        <SelectItem value="custom">高级配置 (完全自定义)</SelectItem>
                       </SelectContent>
                     </Select>
                     <p className="text-xs text-muted-foreground">
-                      {formData.scanType === 'quick' && '扫描常用的100个端口，速度快'}
-                      {formData.scanType === 'full' && '扫描所有端口，耗时较长'}
-                      {formData.scanType === 'custom' && '自定义扫描范围和选项'}
+                      {formData.scanType === 'quick' && '扫描常用的100个端口，适合快速发现'}
+                      {formData.scanType === 'full' && '扫描所有端口并检测服务版本，耗时较长但信息完整'}
+                      {formData.scanType === 'stealth' && '使用SYN扫描，不完成TCP连接，更隐蔽'}
+                      {formData.scanType === 'custom' && '自定义扫描范围、速度和检测选项'}
                     </p>
                   </div>
 
@@ -445,30 +456,83 @@ export function CreateTaskDialog() {
                         </p>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="serviceDetection"
-                          checked={formData.serviceDetection || false}
-                          onChange={(e) => setFormData({ ...formData, serviceDetection: e.target.checked })}
-                          className="rounded border-gray-300"
-                        />
-                        <Label htmlFor="serviceDetection" className="font-normal cursor-pointer">
-                          服务版本检测 (-sV)
-                        </Label>
+                      <div className="space-y-2">
+                        <Label htmlFor="timing">扫描速度</Label>
+                        <Select
+                          value={formData.timing || 'T4'}
+                          onValueChange={(value) => setFormData({ ...formData, timing: value })}
+                        >
+                          <SelectTrigger id="timing">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="T0">偏执模式 (极慢，规避IDS)</SelectItem>
+                            <SelectItem value="T1">鬼祟模式 (很慢)</SelectItem>
+                            <SelectItem value="T2">文雅模式 (慢)</SelectItem>
+                            <SelectItem value="T3">常规模式 (默认)</SelectItem>
+                            <SelectItem value="T4">激进模式 (快速，推荐)</SelectItem>
+                            <SelectItem value="T5">疯狂模式 (最快，可能不准)</SelectItem>
+                          </SelectContent>
+                        </Select>
+                        <p className="text-xs text-muted-foreground">
+                          速度越快越容易被IDS/IPS检测，根据目标环境选择
+                        </p>
                       </div>
 
-                      <div className="flex items-center space-x-2">
-                        <input
-                          type="checkbox"
-                          id="osDetection"
-                          checked={formData.osDetection || false}
-                          onChange={(e) => setFormData({ ...formData, osDetection: e.target.checked })}
-                          className="rounded border-gray-300"
-                        />
-                        <Label htmlFor="osDetection" className="font-normal cursor-pointer">
-                          操作系统检测 (-O, 需要root权限)
-                        </Label>
+                      <div className="space-y-3 pt-2">
+                        <Label>检测选项</Label>
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="serviceDetection"
+                            checked={formData.serviceDetection || false}
+                            onChange={(e) => setFormData({ ...formData, serviceDetection: e.target.checked })}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor="serviceDetection" className="font-normal cursor-pointer">
+                            服务版本检测 (-sV)
+                          </Label>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="osDetection"
+                            checked={formData.osDetection || false}
+                            onChange={(e) => setFormData({ ...formData, osDetection: e.target.checked })}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor="osDetection" className="font-normal cursor-pointer">
+                            操作系统检测 (-O，需要root权限)
+                          </Label>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="verboseOutput"
+                            checked={formData.verboseOutput || false}
+                            onChange={(e) => setFormData({ ...formData, verboseOutput: e.target.checked })}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor="verboseOutput" className="font-normal cursor-pointer">
+                            详细输出 (-v)
+                          </Label>
+                        </div>
+
+                        <div className="flex items-center space-x-2">
+                          <input
+                            type="checkbox"
+                            id="skipHostDiscovery"
+                            checked={formData.skipHostDiscovery || false}
+                            onChange={(e) => setFormData({ ...formData, skipHostDiscovery: e.target.checked })}
+                            className="rounded border-gray-300"
+                          />
+                          <Label htmlFor="skipHostDiscovery" className="font-normal cursor-pointer">
+                            禁用主机发现 (-Pn，扫描防火墙后主机)
+                          </Label>
+                        </div>
                       </div>
                     </>
                   )}
