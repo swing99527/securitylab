@@ -109,6 +109,11 @@ export function CreateTaskDialog() {
     fuzzProtocol: "",
     fuzzTimeout: "60",
     fuzzIterations: "10000",
+
+    // Vulnerability scan config
+    vulnScanResultId: "",
+    severityFilter: ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as string[],
+    nvdApiKey: "",
   })
 
   const handleEngineToggle = (engine: string) => {
