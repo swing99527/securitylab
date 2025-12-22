@@ -1,7 +1,7 @@
 """
 Database models for IoT Security Testing Platform
 """
-from sqlalchemy import Column, String, Integer, DateTime, Date, ForeignKey, Text, Numeric, CheckConstraint, Index
+from sqlalchemy import Column, String, Integer, DateTime, Date, ForeignKey, Text, Numeric, CheckConstraint, Index, Float
 from sqlalchemy.dialects.postgresql import UUID, JSONB
 from sqlalchemy.sql import func
 from sqlalchemy.orm import relationship
@@ -127,7 +127,7 @@ class Task(Base):
             name="chk_task_status"
         ),
         CheckConstraint(
-            "type IN ('nmap_scan', 'vuln_scan', 'firmware_analysis', 'fuzzing', 'pentest')",
+            "type IN ('ping_scan', 'nmap_scan', 'vuln_scan', 'firmware_analysis', 'fuzzing', 'pentest')",
             name="chk_task_type"
         ),
         CheckConstraint(
@@ -152,6 +152,7 @@ class ScanResult(Base):
     
     # Relationships
     task = relationship("Task", back_populates="scan_results")
+    vulnerabilities = relationship("Vulnerability", back_populates="scan_result", cascade="all, delete-orphan")
     
     __table_args__ = (
         Index("idx_scan_result_task", "task_id"),
@@ -159,28 +160,60 @@ class ScanResult(Base):
     )
 
 class Vulnerability(Base):
-    """Vulnerability model"""
+    """Vulnerability model - Enhanced for CVE tracking"""
     __tablename__ = "vulnerabilities"
     
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     task_id = Column(UUID(as_uuid=True), ForeignKey("tasks.id", ondelete="CASCADE"), nullable=False)
-    name = Column(String(300), nullable=False)
-    severity = Column(String(20), nullable=False)
-    status = Column(String(20), server_default="open")
+    scan_result_id = Column(UUID(as_uuid=True), ForeignKey("scan_results.id", ondelete="CASCADE"))
+    
+    # Legacy fields (keep for backwards compatibility)
+    name = Column(String(300))
     cve = Column(String(50))
-    cvss_score = Column(Numeric(3, 1))
     description = Column(Text)
     evidence = Column(JSONB)
+    
+    # CVE Information
+    cve_id = Column(String(50), index=True)  # CVE-2024-1234
+    cve_description = Column(Text)
+    
+    # Affected Service
+    service_name = Column(String(100))
+    service_version = Column(String(100))
+    port = Column(Integer)
+    protocol = Column(String(10))
+    
+    # Severity
+    severity = Column(String(20), nullable=False)
+    status = Column(String(20), server_default="open")
+    cvss_score = Column(Float)  # Support 0.0-10.0
+    cvss_vector = Column(String(200))
+    
+    # CVE Metadata
+    published_date = Column(DateTime(timezone=True))
+    last_modified_date = Column(DateTime(timezone=True))
+    references = Column(JSONB)  # Array of {url, source}
+    
+    # Remediation
+    remediation = Column(Text)
+    
+    # Timestamps
     discovered_at = Column(DateTime(timezone=True), server_default=func.now())
+    created_at = Column(DateTime(timezone=True), server_default=func.now())
+    updated_at = Column(DateTime(timezone=True), onupdate=func.now())
     
     # Relationships
     task = relationship("Task", back_populates="vulnerabilities")
+    scan_result = relationship("ScanResult", back_populates="vulnerabilities")
     
     __table_args__ = (
         CheckConstraint(
-            "severity IN ('critical', 'high', 'medium', 'low', 'info')",
+            "severity IN ('CRITICAL', 'HIGH', 'MEDIUM', 'LOW', 'NONE', 'UNKNOWN', 'critical', 'high', 'medium', 'low', 'info')",
             name="chk_vuln_severity"
         ),
+        Index("idx_vuln_task", "task_id"),
+        Index("idx_vuln_scan_result", "scan_result_id"),
+        Index("idx_vuln_cve_id", "cve_id"),
     )
 
 class AuditLog(Base):
