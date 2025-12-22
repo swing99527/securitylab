@@ -1,0 +1,15 @@
+ else if (formData.taskType === "vuln_scan") {
+        if (!formData.vulnScanResultId) {
+          toast({
+            title: "缺少必填项",
+            description: "请选择Nmap扫描结果",
+            variant: "destructive",
+          })
+          return
+        }
+        config.scan_result_id = formData.vulnScanResultId
+        config.severity_filter = formData.severityFilter
+        if (formData.nvdApiKey) {
+          config.nvd_api_key = formData.nvdApiKey
+        }
+      }

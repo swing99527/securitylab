@@ -196,6 +196,7 @@ export function CreateTaskDialog() {
           config.skipHostDiscovery = formData.skipHostDiscovery || false
         }
       }
+ else if (formData.taskType === "vuln_scan") {
         if (!formData.vulnScanResultId) {
           toast({
             title: "缺少必填项",
@@ -209,6 +210,7 @@ export function CreateTaskDialog() {
         if (formData.nvdApiKey) {
           config.nvd_api_key = formData.nvdApiKey
         }
+      }
 
       console.log('📦 Task config:', config)
 
