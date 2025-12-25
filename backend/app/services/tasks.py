@@ -55,6 +55,46 @@ async def create_task(
     task_data: TaskCreate
 ) -> Task:
     """Create new task with auto-generated code"""
+    # ⭐ Phase 3: Validate project exists
+    project_stmt = select(Project).where(Project.id == task_data.project_id)
+    project_result = await db.execute(project_stmt)
+    project = project_result.scalar_one_or_none()
+    
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project {task_data.project_id} not found"
+        )
+    
+    # ⭐⭐⭐ Phase 3: CRITICAL - Validate sample belongs to same project
+    if task_data.sample_id:
+        sample_stmt = select(Sample).where(Sample.id == task_data.sample_id)
+        sample_result = await db.execute(sample_stmt)
+        sample = sample_result.scalar_one_or_none()
+        
+        if not sample:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=404,
+                detail=f"Sample {task_data.sample_id} not found"
+            )
+        
+        # ⭐⭐⭐ KEY VALIDATION: Sample must belong to same project
+        if sample.project_id != task_data.project_id:
+            from fastapi import HTTPException
+            raise HTTPException(
+                status_code=400,
+                detail={
+                    "error": "Sample does not belong to this project",
+                    "sample_id": str(task_data.sample_id),
+                    "sample_project_id": str(sample.project_id),
+                    "task_project_id": str(task_data.project_id),
+                    "message": f"Sample '{sample.name}' belongs to project {sample.project_id}, but task is for project {task_data.project_id}. Please select a sample from the same project."
+                }
+            )
+    
+    # Generate task code
     code = await generate_task_code(db, task_data.project_id)
     
     task = Task(

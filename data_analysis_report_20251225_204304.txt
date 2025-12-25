@@ -1,0 +1,59 @@
+======================================
+Phase 1: Data Analysis Report
+Generated: Thu Dec 25 20:43:04 CST 2025
+======================================
+
+=== 1. Sample Statistics ===
+{
+  "total_samples": 8,
+  "sample_status": [
+    {
+      "status": "in_stock",
+      "count": 4
+    },
+    {
+      "status": "in_use",
+      "count": 3
+    },
+    {
+      "status": "returned",
+      "count": 1
+    }
+  ]
+}
+
+=== 2. Project-Sample Relationship ===
+Project: 7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc
+{
+  "project_id": "7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc",
+  "sample_count": 0
+}
+Project: c24e423f-9555-4d95-98d9-bdbf4582c30d
+{
+  "project_id": "c24e423f-9555-4d95-98d9-bdbf4582c30d",
+  "sample_count": 0
+}
+Project: d8e49504-59db-491d-8063-6bf86553af2b
+{
+  "project_id": "d8e49504-59db-491d-8063-6bf86553af2b",
+  "sample_count": 0
+}
+
+=== 3. Task-Sample Analysis ===
+{
+  "total_tasks": 11,
+  "tasks_with_samples": 11,
+  "tasks_without_samples": 0
+}
+
+=== 4. Cross-Project Check (Sample) ===
+Checking first 5 tasks with samples...
+❌ MISMATCH: Task 88e5e613-0bfa-475a-b4bd-98c34d178bd1 (project: 7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc) uses Sample eee78df9-91aa-4fc8-aac7-2464b740ec2e (project: 062ddd51-98d6-4dc6-9cfd-fe047db33ad3)
+❌ MISMATCH: Task b0797835-b5e6-4e15-a552-614a627fb0cb (project: 7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc) uses Sample eee78df9-91aa-4fc8-aac7-2464b740ec2e (project: 062ddd51-98d6-4dc6-9cfd-fe047db33ad3)
+❌ MISMATCH: Task 04cc83ba-52bc-4e1e-8aaa-948a4bebe534 (project: 7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc) uses Sample eee78df9-91aa-4fc8-aac7-2464b740ec2e (project: 062ddd51-98d6-4dc6-9cfd-fe047db33ad3)
+❌ MISMATCH: Task 168834fa-fe45-4dca-8b75-a6b8248b72ac (project: d8e49504-59db-491d-8063-6bf86553af2b) uses Sample fba02002-3d24-4fc3-ac1d-1a4dddf7f7c1 (project: 55cd2eb1-9f04-4eb5-844b-6f82fea38a5b)
+❌ MISMATCH: Task 73fe3ef4-55ce-43c2-aae8-51a08793339c (project: e5294498-a011-4df8-a284-247f541da04e) uses Sample 95771117-32a2-4633-9d24-c09a84909a49 (project: 55cd2eb1-9f04-4eb5-844b-6f82fea38a5b)
+
+======================================
+Analysis Complete
+======================================

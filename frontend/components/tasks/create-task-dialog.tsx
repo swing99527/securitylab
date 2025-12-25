@@ -16,35 +16,21 @@ import {
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Checkbox } from "@/components/ui/checkbox"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
-import { Plus, Loader2, Upload, Network, FileCode, Zap } from "lucide-react"
+import { Plus, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
 import { projectApi, sampleApi, taskApi } from "@/lib/api"
 
-const scanTemplates = [
-  { value: "quick", label: "快速扫描", description: "基础端口和服务检测" },
-  { value: "standard", label: "标准扫描", description: "完整端口扫描 + 漏洞检测" },
-  { value: "deep", label: "深度扫描", description: "全端口 + 深度漏洞分析" },
-  { value: "custom", label: "自定义", description: "自定义扫描参数" },
-]
-
-const testEngines = [
-  { value: "ping_scan", label: "Ping扫描", category: "network" },
-  { value: "nmap", label: "Nmap", category: "network" },
-  { value: "openvas", label: "OpenVAS", category: "vuln" },
-  { value: "nessus", label: "Nessus", category: "vuln" },
-  { value: "binwalk", label: "Binwalk", category: "firmware" },
-  { value: "firmwalker", label: "Firmwalker", category: "firmware" },
-  { value: "boofuzz", label: "Boofuzz", category: "fuzzing" },
-  { value: "aflnet", label: "AFLNet", category: "fuzzing" },
-]
+// Import task-specific config components
+import { PingScanConfig } from "./task-configs/ping-scan-config"
+import { NmapScanConfig } from "./task-configs/nmap-scan-config"
+import { VulnScanConfig } from "./task-configs/vuln-scan-config"
+import { FirmwareConfig } from "./task-configs/firmware-config"
+import { FuzzingConfig } from "./task-configs/fuzzing-config"
 
 export function CreateTaskDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
-  const [activeTab, setActiveTab] = useState("basic")
   const { toast } = useToast()
 
   // Real data from API
@@ -62,21 +48,49 @@ export function CreateTaskDialog() {
   const fetchData = async () => {
     setLoadingData(true)
     try {
-      const [projectsRes, samplesRes] = await Promise.all([
-        projectApi.getList({ page: 1, pageSize: 100 }),
-        sampleApi.getList({ page: 1, pageSize: 100 })
-      ])
+      // Fetch projects
+      const projectsRes = await projectApi.getList({ page: 1, pageSize: 100 })
 
       if (projectsRes.code === 200 && projectsRes.data) {
         setProjects(projectsRes.data.list || [])
       }
-      if (samplesRes.code === 200 && samplesRes.data) {
-        setSamples(samplesRes.data.list || [])
-      }
+
+      // ⭐ Samples will be fetched when project is selected
+      // Don't fetch all samples here to avoid showing wrong samples
     } catch (error) {
       console.error('Failed to fetch data:', error)
     } finally {
       setLoadingData(false)
+    }
+  }
+
+  // ⭐ NEW: Fetch samples for selected project
+  const fetchProjectSamples = async (projectId: string) => {
+    if (!projectId) {
+      setSamples([])
+      return
+    }
+
+    try {
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+      const token = localStorage.getItem('token')
+
+      const response = await fetch(
+        `${apiBaseUrl}/api/v1/samples?project_id=${projectId}`,
+        {
+          headers: { 'Authorization': `Bearer ${token}` }
+        }
+      )
+
+      if (response.ok) {
+        const data = await response.json()
+        setSamples(data.items || [])
+      } else {
+        setSamples([])
+      }
+    } catch (error) {
+      console.error('Failed to fetch project samples:', error)
+      setSamples([])
     }
   }
 
@@ -105,10 +119,18 @@ export function CreateTaskDialog() {
     vulnEngines: [] as string[],
     // Firmware config
     firmwareFile: null as File | null,
+    firmware_file: "",
+    firmware_filename: "",
+    firmware_size: 0,
+    analysis_depth: "standard",
+    scan_types: ["strings", "credentials", "crypto"],
     // Fuzzing config
+    target_url: "",
+    method: "GET",
+    test_types: ["sql_injection", "xss", "path_traversal"],
     fuzzProtocol: "",
-    fuzzTimeout: "60",
-    fuzzIterations: "10000",
+    fuzzTimeout: "10",
+    fuzzIterations: "1000",
 
     // Vulnerability scan config
     vulnScanResultId: "",
@@ -196,7 +218,7 @@ export function CreateTaskDialog() {
           config.skipHostDiscovery = formData.skipHostDiscovery || false
         }
       }
- else if (formData.taskType === "vuln_scan") {
+      else if (formData.taskType === "vuln_scan") {
         if (!formData.vulnScanResultId) {
           toast({
             title: "缺少必填项",
@@ -205,12 +227,51 @@ export function CreateTaskDialog() {
           })
           return
         }
-        config.scan_result_id = formData.vulnScanResultId
+        // Send nmap_task_id instead of scan_result_id
+        config.nmap_task_id = formData.vulnScanResultId
         config.severity_filter = formData.severityFilter
         if (formData.nvdApiKey) {
           config.nvd_api_key = formData.nvdApiKey
         }
       }
+      else if (formData.taskType === "fuzzing") {
+        // Validate required fields for fuzzing
+        if (!formData.target_url || !formData.target_url.trim()) {
+          toast({
+            title: "缺少必填项",
+            description: "请输入目标URL",
+            variant: "destructive",
+          })
+          return
+        }
+
+        config.target_url = formData.target_url.trim()
+        config.method = formData.method || "GET"
+        config.test_types = formData.test_types || ["sql_injection", "xss", "path_traversal"]
+        config.fuzz_timeout = parseInt(formData.fuzzTimeout) || 10
+        config.fuzz_iterations = parseInt(formData.fuzzIterations) || 1000
+      }
+      else if (formData.taskType === "firmware_analysis") {
+        // Validate firmware file uploaded
+        if (!formData.firmware_file) {
+          toast({
+            title: "缺少必填项",
+            description: "请上传固件文件",
+            variant: "destructive",
+          })
+          return
+        }
+
+        config.firmware_file = formData.firmware_file
+        config.analysis_depth = formData.analysis_depth || "standard"
+        config.scan_types = formData.scan_types || ["strings", "credentials", "crypto"]
+      }
+
+      console.log("🔍 Debug formData before creating firmware task:", {
+        firmware_file: formData.firmware_file,
+        firmware_filename: formData.firmware_filename,
+        firmware_size: formData.firmware_size
+      })
 
       console.log('📦 Task config:', config)
 
@@ -233,21 +294,42 @@ export function CreateTaskDialog() {
         })
 
         setOpen(false)
-        // Reset form
+        // Reset form to initial state
         setFormData({
           name: "",
           projectId: "",
           sampleId: "",
-          taskType: "ping_scan",
+          taskType: "",
           description: "",
+          // Ping scan
           targetIp: "",
+          count: 4,
+          // Nmap scan
+          target: "",
+          scanType: "quick",
+          ports: "",
+          timing: "T4",
+          serviceDetection: false,
+          osDetection: false,
+          verboseOutput: false,
+          skipHostDiscovery: false,
+          // Legacy fields (kept for compatibility)
           portRange: "1-65535",
           scanTemplate: "standard",
-          vulnEngines: [],
-          firmwareFile: null,
+          // Vuln scan
+          vulnScanResultId: "",
+          severityFilter: ["CRITICAL", "HIGH", "MEDIUM", "LOW"] as string[],
+          nvdApiKey: "",
+          // Firmware
+          firmwareFile: null as File | null,
+          // Fuzzing
+          target_url: "",
+          method: "GET",
+          test_types: ["sql_injection", "xss", "path_traversal"],
           fuzzProtocol: "",
-          fuzzTimeout: "30",
-          fuzzIterations: "10000",
+          fuzzTimeout: "10",
+          fuzzIterations: "1000",
+          vulnEngines: [],
         })
 
         // Reload page to show new task
@@ -286,15 +368,9 @@ export function CreateTaskDialog() {
             <DialogDescription>配置检测任务参数，支持网络扫描、漏洞检测、固件分析和协议模糊测试</DialogDescription>
           </DialogHeader>
 
-          <Tabs value={activeTab} onValueChange={setActiveTab} className="mt-4">
-            <TabsList className="grid w-full grid-cols-4">
-              <TabsTrigger value="basic">基本信息</TabsTrigger>
-              <TabsTrigger value="network">网络扫描</TabsTrigger>
-              <TabsTrigger value="firmware">固件分析</TabsTrigger>
-              <TabsTrigger value="fuzzing">模糊测试</TabsTrigger>
-            </TabsList>
-
-            <TabsContent value="basic" className="space-y-4 mt-4">
+          <div className="space-y-6 mt-4">
+            {/* Basic Information Section */}
+            <div className="space-y-4">
               <div className="space-y-2">
                 <Label htmlFor="name">
                   任务名称 <span className="text-destructive">*</span>
@@ -302,7 +378,7 @@ export function CreateTaskDialog() {
                 <Input
                   id="name"
                   placeholder="例如：智能门锁固件安全检测"
-                  value={formData.name}
+                  value={formData.name || ""}
                   onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                 />
               </div>
@@ -313,7 +389,10 @@ export function CreateTaskDialog() {
                 </Label>
                 <Select
                   value={formData.projectId}
-                  onValueChange={(value) => setFormData({ ...formData, projectId: value })}
+                  onValueChange={(value) => {
+                    setFormData({ ...formData, projectId: value, sampleId: "" })  // ⭐ Clear sample when project changes
+                    fetchProjectSamples(value)  // ⭐ Fetch samples for selected project
+                  }}
                 >
                   <SelectTrigger>
                     <SelectValue placeholder="选择关联项目" />
@@ -336,31 +415,39 @@ export function CreateTaskDialog() {
 
               <div className="space-y-2">
                 <Label htmlFor="sample">关联样品 (可选)</Label>
-                <Select
-                  value={formData.sampleId}
-                  onValueChange={(value) => setFormData({ ...formData, sampleId: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择关联样品（可选）" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {loadingData ? (
-                      <div className="p-2 text-sm text-muted-foreground">加载中...</div>
-                    ) : samples.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground">暂无样品</div>
-                    ) : (
-                      samples.map((sample) => (
-                        <SelectItem key={sample.id} value={sample.id}>
-                          {sample.name} ({sample.code})
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
+                {!formData.projectId ? (
+                  <p className="text-sm text-muted-foreground p-2 border rounded">
+                    请先选择关联项目
+                  </p>
+                ) : (
+                  <Select
+                    value={formData.sampleId}
+                    onValueChange={(value) => setFormData({ ...formData, sampleId: value })}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="选择关联样品（可选）" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {loadingData ? (
+                        <div className="p-2 text-sm text-muted-foreground">加载中...</div>
+                      ) : samples.length === 0 ? (
+                        <div className="p-2 text-sm text-muted-foreground">
+                          当前项目暂无样品
+                        </div>
+                      ) : (
+                        samples.map((sample) => (
+                          <SelectItem key={sample.id} value={sample.id}>
+                            {sample.name} ({sample.code})
+                          </SelectItem>
+                        ))
+                      )}
+                    </SelectContent>
+                  </Select>
+                )}
               </div>
 
               <div className="space-y-2">
-                <Label>任务类型 *</Label>
+                <Label>任务类型 <span className="text-destructive">*</span></Label>
                 <Select
                   value={formData.taskType}
                   onValueChange={(value) => setFormData({ ...formData, taskType: value })}
@@ -378,210 +465,6 @@ export function CreateTaskDialog() {
                 </Select>
               </div>
 
-              {/* 任务类型特定配置 */}
-              {formData.taskType === "ping_scan" && (
-                <div className="space-y-2">
-                  <Label htmlFor="targetIp">目标 IP/域名 *</Label>
-                  <Input
-                    id="targetIp"
-                    placeholder="例如: 8.8.8.8 或 google.com"
-                    value={formData.targetIp}
-                    onChange={(e) => setFormData({ ...formData, targetIp: e.target.value })}
-                  />
-                  <p className="text-xs text-muted-foreground">
-                    输入要测试连通性的目标IP地址或域名
-                  </p>
-                </div>
-              )}
-
-              {/* Ping Scan配置 */}
-              {formData.taskType === 'ping_scan' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="targetIp">目标IP/域名 *</Label>
-                    <Input
-                      id="targetIp"
-                      placeholder="例如: baidu.com 或 192.168.1.1"
-                      value={formData.targetIp || ''}
-                      onChange={(e) => setFormData({ ...formData, targetIp: e.target.value })}
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="count">Ping次数</Label>
-                    <Input
-                      id="count"
-                      type="number"
-                      min="1"
-                      max="10"
-                      value={formData.count || 4}
-                      onChange={(e) => setFormData({ ...formData, count: parseInt(e.target.value) })}
-                    />
-                  </div>
-                </div>
-              )}
-
-              {/* Nmap Scan配置 */}
-              {formData.taskType === 'nmap_scan' && (
-                <div className="space-y-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="nmapTarget">扫描目标 *</Label>
-                    <Input
-                      id="nmapTarget"
-                      placeholder="支持: IP(192.168.1.1) | 网段(192.168.1.0/24) | 域名(example.com) | 范围(192.168.1.1-50)"
-                      value={formData.target || ''}
-                      onChange={(e) => setFormData({ ...formData, target: e.target.value })}
-                    />
-                    <p className="text-xs text-muted-foreground">
-                      支持单IP、CIDR网段、IP范围或域名，多个目标用空格分隔
-                    </p>
-                  </div>
-
-                  <div className="space-y-2">
-                    <Label htmlFor="scanType">扫描类型</Label>
-                    <Select
-                      value={formData.scanType || 'quick'}
-                      onValueChange={(value) => setFormData({ ...formData, scanType: value })}
-                    >
-                      <SelectTrigger id="scanType">
-                        <SelectValue placeholder="选择扫描类型" />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="quick">快速发现 (Top 100端口，~30秒)</SelectItem>
-                        <SelectItem value="full">完整审计 (全部65535端口 + 服务检测，10-30分钟)</SelectItem>
-                        <SelectItem value="stealth">隐蔽扫描 (SYN扫描，规避检测)</SelectItem>
-                        <SelectItem value="custom">高级配置 (完全自定义)</SelectItem>
-                      </SelectContent>
-                    </Select>
-                    <p className="text-xs text-muted-foreground">
-                      {formData.scanType === 'quick' && '扫描常用的100个端口，适合快速发现'}
-                      {formData.scanType === 'full' && '扫描所有端口并检测服务版本，耗时较长但信息完整'}
-                      {formData.scanType === 'stealth' && '使用SYN扫描，不完成TCP连接，更隐蔽'}
-                      {formData.scanType === 'custom' && '自定义扫描范围、速度和检测选项'}
-                    </p>
-                  </div>
-
-                  {formData.scanType === 'custom' && (
-                    <>
-                      <div className="space-y-2">
-                        <Label htmlFor="ports">端口范围</Label>
-                        <Input
-                          id="ports"
-                          placeholder="例如: 1-1000 或 80,443,8080"
-                          value={formData.ports || ''}
-                          onChange={(e) => setFormData({ ...formData, ports: e.target.value })}
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          支持范围(1-1000)、列表(80,443)或组合
-                        </p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="timing">扫描速度</Label>
-                        <Select
-                          value={formData.timing || 'T4'}
-                          onValueChange={(value) => setFormData({ ...formData, timing: value })}
-                        >
-                          <SelectTrigger id="timing">
-                            <SelectValue />
-                          </SelectTrigger>
-                          <SelectContent>
-                            <SelectItem value="T0">偏执模式 (极慢，规避IDS)</SelectItem>
-                            <SelectItem value="T1">鬼祟模式 (很慢)</SelectItem>
-                            <SelectItem value="T2">文雅模式 (慢)</SelectItem>
-                            <SelectItem value="T3">常规模式 (默认)</SelectItem>
-                            <SelectItem value="T4">激进模式 (快速，推荐)</SelectItem>
-                            <SelectItem value="T5">疯狂模式 (最快，可能不准)</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <p className="text-xs text-muted-foreground">
-                          速度越快越容易被IDS/IPS检测，根据目标环境选择
-                        </p>
-                      </div>
-
-                      <div className="space-y-3 pt-2">
-                        <Label>检测选项</Label>
-
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="serviceDetection"
-                            checked={formData.serviceDetection || false}
-                            onChange={(e) => setFormData({ ...formData, serviceDetection: e.target.checked })}
-                            className="rounded border-gray-300"
-                          />
-                          <Label htmlFor="serviceDetection" className="font-normal cursor-pointer">
-                            服务版本检测 (-sV)
-                          </Label>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="osDetection"
-                            checked={formData.osDetection || false}
-                            onChange={(e) => setFormData({ ...formData, osDetection: e.target.checked })}
-                            className="rounded border-gray-300"
-                          />
-                          <Label htmlFor="osDetection" className="font-normal cursor-pointer">
-                            操作系统检测 (-O，需要root权限)
-                          </Label>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="verboseOutput"
-                            checked={formData.verboseOutput || false}
-                            onChange={(e) => setFormData({ ...formData, verboseOutput: e.target.checked })}
-                            className="rounded border-gray-300"
-                          />
-                          <Label htmlFor="verboseOutput" className="font-normal cursor-pointer">
-                            详细输出 (-v)
-                          </Label>
-                        </div>
-
-                        <div className="flex items-center space-x-2">
-                          <input
-                            type="checkbox"
-                            id="skipHostDiscovery"
-                            checked={formData.skipHostDiscovery || false}
-                            onChange={(e) => setFormData({ ...formData, skipHostDiscovery: e.target.checked })}
-                            className="rounded border-gray-300"
-                          />
-                          <Label htmlFor="skipHostDiscovery" className="font-normal cursor-pointer">
-                            禁用主机发现 (-Pn，扫描防火墙后主机)
-                          </Label>
-                        </div>
-                      </div>
-                    </>
-                  )}
-                </div>
-              )}
-
-              {formData.taskType === "nmap_scan" && (
-                <div className="space-y-3">
-                  <div className="space-y-2">
-                    <Label htmlFor="targetIp">目标 IP/网段 *</Label>
-                    <Input
-                      id="targetIp"
-                      placeholder="192.168.1.100 或 192.168.1.0/24"
-                      value={formData.targetIp}
-                      onChange={(e) => setFormData({ ...formData, targetIp: e.target.value })}
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="portRange">端口范围</Label>
-                    <Input
-                      id="portRange"
-                      placeholder="1-65535"
-                      value={formData.portRange}
-                      onChange={(e) => setFormData({ ...formData, portRange: e.target.value })}
-                    />
-                  </div>
-                </div>
-              )}
-
               <div className="space-y-2">
                 <Label htmlFor="description">任务描述</Label>
                 <Textarea
@@ -592,148 +475,19 @@ export function CreateTaskDialog() {
                   rows={3}
                 />
               </div>
-            </TabsContent>
+            </div>
 
-            <TabsContent value="network" className="space-y-4 mt-4">
-              <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
-                <Network className="h-5 w-5 text-primary" />
-                <span className="text-sm">网络扫描配置</span>
+            {/* Dynamic Task Configuration */}
+            {formData.taskType && (
+              <div className="border-t pt-6">
+                {formData.taskType === 'ping_scan' && <PingScanConfig formData={formData} setFormData={setFormData} />}
+                {formData.taskType === 'nmap_scan' && <NmapScanConfig formData={formData} setFormData={setFormData} />}
+                {formData.taskType === 'vuln_scan' && <VulnScanConfig formData={formData} setFormData={setFormData} />}
+                {formData.taskType === 'firmware_analysis' && <FirmwareConfig formData={formData} setFormData={setFormData} />}
+                {formData.taskType === 'fuzzing' && <FuzzingConfig formData={formData} setFormData={setFormData} />}
               </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="targetIp">目标 IP/网段</Label>
-                  <Input
-                    id="targetIp"
-                    placeholder="192.168.1.100 或 192.168.1.0/24"
-                    value={formData.targetIp}
-                    onChange={(e) => setFormData({ ...formData, targetIp: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="portRange">端口范围</Label>
-                  <Input
-                    id="portRange"
-                    placeholder="1-65535"
-                    value={formData.portRange}
-                    onChange={(e) => setFormData({ ...formData, portRange: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="space-y-2">
-                <Label>扫描模板</Label>
-                <div className="grid grid-cols-2 gap-3">
-                  {scanTemplates.map((template) => (
-                    <div
-                      key={template.value}
-                      className={`p-3 border rounded-lg cursor-pointer transition-colors ${formData.scanTemplate === template.value
-                        ? "border-primary bg-primary/10"
-                        : "hover:border-muted-foreground/50"
-                        }`}
-                      onClick={() => setFormData({ ...formData, scanTemplate: template.value })}
-                    >
-                      <div className="font-medium text-sm">{template.label}</div>
-                      <div className="text-xs text-muted-foreground">{template.description}</div>
-                    </div>
-                  ))}
-                </div>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="firmware" className="space-y-4 mt-4">
-              <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
-                <FileCode className="h-5 w-5 text-primary" />
-                <span className="text-sm">固件分析配置</span>
-              </div>
-
-              <div className="space-y-2">
-                <Label>上传固件文件</Label>
-                <div className="border-2 border-dashed rounded-lg p-8 text-center hover:border-primary/50 transition-colors cursor-pointer">
-                  <Upload className="h-10 w-10 mx-auto text-muted-foreground mb-3" />
-                  <p className="text-sm text-muted-foreground">拖拽固件文件到此处，或点击上传</p>
-                  <p className="text-xs text-muted-foreground mt-1">支持 .bin, .img, .hex, .elf 格式，最大 500MB</p>
-                  <Input
-                    type="file"
-                    className="hidden"
-                    accept=".bin,.img,.hex,.elf"
-                    onChange={(e) => {
-                      const file = e.target.files?.[0]
-                      if (file) {
-                        setFormData({ ...formData, firmwareFile: file })
-                      }
-                    }}
-                  />
-                </div>
-                {formData.firmwareFile && <p className="text-sm text-success">已选择: {formData.firmwareFile.name}</p>}
-              </div>
-
-              <div className="p-4 bg-muted/50 rounded-lg">
-                <h4 className="font-medium text-sm mb-2">固件分析将执行:</h4>
-                <ul className="text-sm text-muted-foreground space-y-1">
-                  <li>• 文件系统解包 (Binwalk)</li>
-                  <li>• 敏感信息扫描 (硬编码密钥、凭证)</li>
-                  <li>• 二进制漏洞分析</li>
-                  <li>• 加密算法检测</li>
-                </ul>
-              </div>
-            </TabsContent>
-
-            <TabsContent value="fuzzing" className="space-y-4 mt-4">
-              <div className="flex items-center gap-2 p-3 bg-primary/10 rounded-lg">
-                <Zap className="h-5 w-5 text-primary" />
-                <span className="text-sm">模糊测试配置</span>
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="fuzzProtocol">目标协议</Label>
-                <Select
-                  value={formData.fuzzProtocol}
-                  onValueChange={(value) => setFormData({ ...formData, fuzzProtocol: value })}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="选择测试协议" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="http">HTTP/HTTPS</SelectItem>
-                    <SelectItem value="mqtt">MQTT</SelectItem>
-                    <SelectItem value="coap">CoAP</SelectItem>
-                    <SelectItem value="modbus">Modbus</SelectItem>
-                    <SelectItem value="ble">BLE GATT</SelectItem>
-                    <SelectItem value="zigbee">ZigBee</SelectItem>
-                    <SelectItem value="custom">自定义协议</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              <div className="grid grid-cols-2 gap-4">
-                <div className="space-y-2">
-                  <Label htmlFor="fuzzTimeout">超时时间 (秒)</Label>
-                  <Input
-                    id="fuzzTimeout"
-                    type="number"
-                    value={formData.fuzzTimeout}
-                    onChange={(e) => setFormData({ ...formData, fuzzTimeout: e.target.value })}
-                  />
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="fuzzIterations">迭代次数</Label>
-                  <Input
-                    id="fuzzIterations"
-                    type="number"
-                    value={formData.fuzzIterations}
-                    onChange={(e) => setFormData({ ...formData, fuzzIterations: e.target.value })}
-                  />
-                </div>
-              </div>
-
-              <div className="p-4 bg-warning/10 border border-warning/30 rounded-lg">
-                <p className="text-sm text-warning">
-                  <strong>注意:</strong> 模糊测试可能导致目标设备崩溃或重启，请确保测试环境已隔离
-                </p>
-              </div>
-            </TabsContent>
-          </Tabs>
+            )}
+          </div>
 
           <DialogFooter className="mt-6">
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>

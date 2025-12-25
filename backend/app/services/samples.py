@@ -51,6 +51,26 @@ async def create_sample(
     sample_data: SampleCreate
 ) -> Sample:
     """Create new sample with auto-generated code and QR code"""
+    # ⭐ Phase 3: Validate project_id is provided
+    if not sample_data.project_id:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=400,
+            detail="project_id is required. Samples must belong to a project."
+        )
+    
+    # ⭐ Phase 3: Validate project exists
+    project_stmt = select(Project).where(Project.id == sample_data.project_id)
+    project_result = await db.execute(project_stmt)
+    project = project_result.scalar_one_or_none()
+    
+    if not project:
+        from fastapi import HTTPException
+        raise HTTPException(
+            status_code=404,
+            detail=f"Project {sample_data.project_id} not found"
+        )
+    
     # Generate unique code
     code = await generate_sample_code(db)
     
