@@ -1,0 +1,126 @@
+======================================================================
+Phase 5: 添加数据库约束
+======================================================================
+2025-12-25 21:04:51,835 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2025-12-25 21:04:51,836 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:04:51,841 INFO sqlalchemy.engine.Engine select current_schema()
+2025-12-25 21:04:51,841 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:04:51,844 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2025-12-25 21:04:51,844 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:04:51,845 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+
+Step 1: 将 samples.project_id 改为 NOT NULL...
+2025-12-25 21:04:51,845 INFO sqlalchemy.engine.Engine 
+                ALTER TABLE samples 
+                ALTER COLUMN project_id SET NOT NULL
+            
+2025-12-25 21:04:51,845 INFO sqlalchemy.engine.Engine [generated in 0.00005s] ()
+  ✓ 完成
+
+Step 2: 修改外键为 CASCADE 删除...
+2025-12-25 21:04:51,848 INFO sqlalchemy.engine.Engine 
+                ALTER TABLE samples 
+                DROP CONSTRAINT IF EXISTS samples_project_id_fkey
+            
+2025-12-25 21:04:51,849 INFO sqlalchemy.engine.Engine [generated in 0.00009s] ()
+2025-12-25 21:04:51,854 INFO sqlalchemy.engine.Engine 
+                ALTER TABLE samples 
+                ADD CONSTRAINT samples_project_id_fkey 
+                FOREIGN KEY (project_id) REFERENCES projects(id) 
+                ON DELETE CASCADE
+            
+2025-12-25 21:04:51,854 INFO sqlalchemy.engine.Engine [generated in 0.00015s] ()
+  ✓ 完成
+
+Step 3: 添加索引...
+2025-12-25 21:04:51,862 INFO sqlalchemy.engine.Engine 
+                    CREATE INDEX IF NOT EXISTS idx_samples_project 
+                    ON samples(project_id)
+                
+2025-12-25 21:04:51,862 INFO sqlalchemy.engine.Engine [generated in 0.00026s] ()
+  ✓ idx_samples_project 创建
+2025-12-25 21:04:51,869 INFO sqlalchemy.engine.Engine 
+                    CREATE INDEX IF NOT EXISTS idx_tasks_project 
+                    ON tasks(project_id)
+                
+2025-12-25 21:04:51,869 INFO sqlalchemy.engine.Engine [generated in 0.00014s] ()
+  ✓ idx_tasks_project 创建
+2025-12-25 21:04:51,870 INFO sqlalchemy.engine.Engine 
+                    CREATE INDEX IF NOT EXISTS idx_tasks_sample 
+                    ON tasks(sample_id)
+                
+2025-12-25 21:04:51,870 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+  ✓ idx_tasks_sample 创建
+
+Step 4: 创建触发器函数...
+2025-12-25 21:04:51,871 INFO sqlalchemy.engine.Engine 
+                CREATE OR REPLACE FUNCTION check_task_sample_project()
+                RETURNS TRIGGER AS $$
+                BEGIN
+                    IF NEW.sample_id IS NOT NULL THEN
+                        IF NOT EXISTS (
+                            SELECT 1 FROM samples 
+                            WHERE id = NEW.sample_id 
+                            AND project_id = NEW.project_id
+                        ) THEN
+                            RAISE EXCEPTION 
+                                'Task sample must belong to the same project. Task project: %, Sample project: %',
+                                NEW.project_id,
+                                (SELECT project_id FROM samples WHERE id = NEW.sample_id);
+                        END IF;
+                    END IF;
+                    RETURN NEW;
+                END;
+                $$ LANGUAGE plpgsql;
+            
+2025-12-25 21:04:51,871 INFO sqlalchemy.engine.Engine [generated in 0.00004s] ()
+  ✓ 函数创建完成
+
+Step 5: 创建触发器...
+2025-12-25 21:04:51,904 INFO sqlalchemy.engine.Engine 
+                DROP TRIGGER IF EXISTS task_sample_project_check ON tasks
+            
+2025-12-25 21:04:51,904 INFO sqlalchemy.engine.Engine [generated in 0.00014s] ()
+2025-12-25 21:04:51,907 INFO sqlalchemy.engine.Engine 
+                CREATE TRIGGER task_sample_project_check
+                BEFORE INSERT OR UPDATE ON tasks
+                FOR EACH ROW EXECUTE FUNCTION check_task_sample_project()
+            
+2025-12-25 21:04:51,908 INFO sqlalchemy.engine.Engine [generated in 0.00013s] ()
+  ✓ 触发器创建完成
+
+======================================================================
+验证约束...
+======================================================================
+2025-12-25 21:04:51,910 INFO sqlalchemy.engine.Engine 
+                SELECT column_name, is_nullable 
+                FROM information_schema.columns
+                WHERE table_name = 'samples' AND column_name = 'project_id'
+            
+2025-12-25 21:04:51,910 INFO sqlalchemy.engine.Engine [generated in 0.00014s] ()
+
+✓ samples.project_id nullable: NO (期望: NO)
+2025-12-25 21:04:51,929 INFO sqlalchemy.engine.Engine 
+                SELECT tc.constraint_name, rc.delete_rule
+                FROM information_schema.table_constraints tc
+                JOIN information_schema.referential_constraints rc 
+                  ON tc.constraint_name = rc.constraint_name
+                WHERE tc.table_name = 'samples' 
+                  AND tc.constraint_type = 'FOREIGN KEY'
+                  AND tc.constraint_name = 'samples_project_id_fkey'
+            
+2025-12-25 21:04:51,929 INFO sqlalchemy.engine.Engine [generated in 0.00015s] ()
+✓ 外键 CASCADE: CASCADE (期望: CASCADE)
+2025-12-25 21:04:51,940 INFO sqlalchemy.engine.Engine 
+                SELECT tgname FROM pg_trigger 
+                WHERE tgname = 'task_sample_project_check'
+            
+2025-12-25 21:04:51,940 INFO sqlalchemy.engine.Engine [generated in 0.00013s] ()
+✓ 触发器存在: task_sample_project_check
+
+======================================================================
+✅ Phase 5 完成！所有约束已添加
+======================================================================
+2025-12-25 21:04:51,942 INFO sqlalchemy.engine.Engine COMMIT
+
+🎉 Phase 5 数据库约束添加成功！

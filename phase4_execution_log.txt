@@ -1,0 +1,178 @@
+======================================================================
+Phase 4: 数据清洗开始
+======================================================================
+2025-12-25 21:02:23,643 INFO sqlalchemy.engine.Engine select pg_catalog.version()
+2025-12-25 21:02:23,643 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:02:23,649 INFO sqlalchemy.engine.Engine select current_schema()
+2025-12-25 21:02:23,649 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:02:23,655 INFO sqlalchemy.engine.Engine show standard_conforming_strings
+2025-12-25 21:02:23,655 INFO sqlalchemy.engine.Engine [raw sql] ()
+2025-12-25 21:02:23,659 INFO sqlalchemy.engine.Engine BEGIN (implicit)
+2025-12-25 21:02:23,660 INFO sqlalchemy.engine.Engine 
+                CREATE TEMP TABLE IF NOT EXISTS pre_cleanup_tasks AS
+                SELECT 
+                    t.id as task_id,
+                    t.name as task_name,
+                    t.project_id as task_project_id,
+                    t.sample_id as sample_id,
+                    s.name as sample_name,
+                    s.project_id as sample_project_id
+                FROM tasks t
+                LEFT JOIN samples s ON t.sample_id = s.id
+                WHERE t.sample_id IS NOT NULL
+            
+2025-12-25 21:02:23,660 INFO sqlalchemy.engine.Engine [generated in 0.00014s] ()
+2025-12-25 21:02:23,689 INFO sqlalchemy.engine.Engine 
+                SELECT COUNT(*) as count
+                FROM pre_cleanup_tasks
+                WHERE task_project_id != sample_project_id
+            
+2025-12-25 21:02:23,689 INFO sqlalchemy.engine.Engine [generated in 0.00022s] ()
+
+✓ 清洗前不一致任务数: 10
+
+开始创建样品副本...
+2025-12-25 21:02:23,691 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP1', name, model, manufacturer,
+                       '7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = 'eee78df9-91aa-4fc8-aac7-2464b740ec2e'
+                RETURNING id
+            
+2025-12-25 21:02:23,691 INFO sqlalchemy.engine.Engine [generated in 0.00010s] ()
+2025-12-25 21:02:23,696 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP1'
+2025-12-25 21:02:23,697 INFO sqlalchemy.engine.Engine [generated in 0.00010s] ()
+2025-12-25 21:02:23,699 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = 'e03172e5-8cda-4818-af67-c57842c11469', updated_at = NOW()
+                WHERE project_id = '7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc'
+                AND sample_id = 'eee78df9-91aa-4fc8-aac7-2464b740ec2e'
+            
+2025-12-25 21:02:23,699 INFO sqlalchemy.engine.Engine [generated in 0.00011s] ()
+  ✓ CP1 创建并更新
+2025-12-25 21:02:23,702 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP2', name, model, manufacturer,
+                       'c24e423f-9555-4d95-98d9-bdbf4582c30d', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = 'eee78df9-91aa-4fc8-aac7-2464b740ec2e'
+            
+2025-12-25 21:02:23,703 INFO sqlalchemy.engine.Engine [generated in 0.00019s] ()
+2025-12-25 21:02:23,706 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP2'
+2025-12-25 21:02:23,706 INFO sqlalchemy.engine.Engine [generated in 0.00015s] ()
+2025-12-25 21:02:23,707 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = 'bd6f7e4c-9a5a-4579-be00-b1ee1057cb12', updated_at = NOW()
+                WHERE project_id = 'c24e423f-9555-4d95-98d9-bdbf4582c30d'
+                AND sample_id = 'eee78df9-91aa-4fc8-aac7-2464b740ec2e'
+            
+2025-12-25 21:02:23,707 INFO sqlalchemy.engine.Engine [generated in 0.00004s] ()
+  ✓ CP2 创建并更新
+2025-12-25 21:02:23,708 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP3', name, model, manufacturer,
+                       '7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = '8d6b5ab7-6cd6-45b5-a59e-4d1a19af0e62'
+            
+2025-12-25 21:02:23,708 INFO sqlalchemy.engine.Engine [generated in 0.00005s] ()
+2025-12-25 21:02:23,710 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP3'
+2025-12-25 21:02:23,710 INFO sqlalchemy.engine.Engine [generated in 0.00005s] ()
+2025-12-25 21:02:23,711 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = '5eb507c7-f293-418c-aa8a-1b62c8e69e60', updated_at = NOW()
+                WHERE project_id = '7e6dc6d7-be2e-4ce2-98ca-a8ef49fd07dc'
+                AND sample_id = '8d6b5ab7-6cd6-45b5-a59e-4d1a19af0e62'
+            
+2025-12-25 21:02:23,712 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ()
+  ✓ CP3 创建并更新
+2025-12-25 21:02:23,713 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP4', name, model, manufacturer,
+                       'e5294498-a011-4df8-a284-247f541da04e', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,713 INFO sqlalchemy.engine.Engine [generated in 0.00006s] ()
+2025-12-25 21:02:23,715 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP4'
+2025-12-25 21:02:23,715 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ()
+2025-12-25 21:02:23,716 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = '2d22956a-9e58-4d99-86ee-2f66ee94257b', updated_at = NOW()
+                WHERE project_id = 'e5294498-a011-4df8-a284-247f541da04e'
+                AND sample_id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,716 INFO sqlalchemy.engine.Engine [generated in 0.00007s] ()
+  ✓ CP4 创建并更新
+2025-12-25 21:02:23,720 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP5', name, model, manufacturer,
+                       'c24e423f-9555-4d95-98d9-bdbf4582c30d', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,720 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ()
+2025-12-25 21:02:23,722 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP5'
+2025-12-25 21:02:23,722 INFO sqlalchemy.engine.Engine [generated in 0.00008s] ()
+2025-12-25 21:02:23,723 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = 'b27457be-d160-40c1-9495-3eeb593906de', updated_at = NOW()
+                WHERE project_id = 'c24e423f-9555-4d95-98d9-bdbf4582c30d'
+                AND sample_id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,723 INFO sqlalchemy.engine.Engine [generated in 0.00004s] ()
+  ✓ CP5 创建并更新
+2025-12-25 21:02:23,724 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP6', name, model, manufacturer,
+                       'd8e49504-59db-491d-8063-6bf86553af2b', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,725 INFO sqlalchemy.engine.Engine [generated in 0.00004s] ()
+2025-12-25 21:02:23,727 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP6'
+2025-12-25 21:02:23,727 INFO sqlalchemy.engine.Engine [generated in 0.00009s] ()
+2025-12-25 21:02:23,729 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = 'd665b253-8f3c-4965-acf9-1111fa5fe291', updated_at = NOW()
+                WHERE project_id = 'd8e49504-59db-491d-8063-6bf86553af2b'
+                AND sample_id = '95771117-32a2-4633-9d24-c09a84909a49'
+            
+2025-12-25 21:02:23,729 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ()
+  ✓ CP6 创建并更新
+2025-12-25 21:02:23,734 INFO sqlalchemy.engine.Engine 
+                INSERT INTO samples (id, code, name, model, manufacturer, project_id, status, location, notes, created_at, updated_at)
+                SELECT gen_random_uuid(), 'SPL-20251225-CP7', name, model, manufacturer,
+                       'd8e49504-59db-491d-8063-6bf86553af2b', status, location,
+                       COALESCE(notes, '') || ' [Phase4复制]', NOW(), NOW()
+                FROM samples WHERE id = 'fba02002-3d24-4fc3-ac1d-1a4dddf7f7c1'
+            
+2025-12-25 21:02:23,734 INFO sqlalchemy.engine.Engine [generated in 0.00029s] ()
+2025-12-25 21:02:23,738 INFO sqlalchemy.engine.Engine SELECT id FROM samples WHERE code = 'SPL-20251225-CP7'
+2025-12-25 21:02:23,738 INFO sqlalchemy.engine.Engine [generated in 0.00017s] ()
+2025-12-25 21:02:23,742 INFO sqlalchemy.engine.Engine 
+                UPDATE tasks SET sample_id = '74c706ad-743e-4ebd-8184-7b2ba33cd69c', updated_at = NOW()
+                WHERE project_id = 'd8e49504-59db-491d-8063-6bf86553af2b'
+                AND sample_id = 'fba02002-3d24-4fc3-ac1d-1a4dddf7f7c1'
+            
+2025-12-25 21:02:23,742 INFO sqlalchemy.engine.Engine [generated in 0.00025s] ()
+  ✓ CP7 创建并更新
+
+======================================================================
+验证清洗结果...
+======================================================================
+2025-12-25 21:02:23,746 INFO sqlalchemy.engine.Engine 
+                SELECT COUNT(*) FROM tasks t
+                JOIN samples s ON t.sample_id = s.id
+                WHERE t.project_id != s.project_id
+            
+2025-12-25 21:02:23,746 INFO sqlalchemy.engine.Engine [generated in 0.00018s] ()
+2025-12-25 21:02:23,750 INFO sqlalchemy.engine.Engine 
+                SELECT COUNT(*) FROM samples WHERE code LIKE 'SPL-20251225-CP%'
+            
+2025-12-25 21:02:23,750 INFO sqlalchemy.engine.Engine [generated in 0.00016s] ()
+
+✓ 清洗后不一致数: 0 (期望: 0)
+✓ 新创建样品数: 7 (期望: 7)
+
+======================================================================
+✅ 验证通过！事务将自动提交
+======================================================================
+2025-12-25 21:02:23,753 INFO sqlalchemy.engine.Engine COMMIT
+
+🎉 Phase 4 数据清洗成功！
