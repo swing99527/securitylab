@@ -17,18 +17,28 @@ class QRCodeService:
     """QR code generation and storage service"""
     
     def __init__(self):
-        """Initialize MinIO client"""
-        self.client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ROOT_USER,
-            secret_key=settings.MINIO_ROOT_PASSWORD,
-            secure=settings.MINIO_USE_SSL
-        )
+        """Initialize MinIO client (gracefully handles unavailability)"""
+        self.client = None
         self.bucket_name = settings.MINIO_BUCKET
-        self._ensure_bucket()
+        self._available = False
+        
+        try:
+            self.client = Minio(
+                settings.MINIO_ENDPOINT,
+                access_key=settings.MINIO_ROOT_USER,
+                secret_key=settings.MINIO_ROOT_PASSWORD,
+                secure=settings.MINIO_USE_SSL
+            )
+            self._ensure_bucket()
+            self._available = True
+            logger.info("MinIO connection established successfully")
+        except Exception as e:
+            logger.warning(f"MinIO not available, QR code generation disabled: {e}")
     
     def _ensure_bucket(self):
         """Ensure bucket exists"""
+        if not self.client:
+            return
         try:
             if not self.client.bucket_exists(self.bucket_name):
                 self.client.make_bucket(self.bucket_name)
@@ -44,8 +54,11 @@ class QRCodeService:
             sample_code: Sample code (e.g., SPL-20251216-001)
         
         Returns:
-            Public URL of the QR code image
+            Public URL of the QR code image, or empty string if MinIO unavailable
         """
+        if not self._available:
+            logger.warning("MinIO not available, skipping QR code generation")
+            return ""
         try:
             # Generate QR code
             qr = qrcode.QRCode(

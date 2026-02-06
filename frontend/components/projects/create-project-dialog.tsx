@@ -3,6 +3,7 @@
 import type React from "react"
 
 import { useState } from "react"
+import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
   Dialog,
@@ -19,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
+import { projectApi } from "@/lib/api"
 
 const complianceStandards = [
   { value: "en18031", label: "EN 18031 无线电设备安全" },
@@ -46,6 +48,7 @@ export function CreateProjectDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
   const { toast } = useToast()
+  const router = useRouter()
 
   const [formData, setFormData] = useState({
     name: "",
@@ -71,25 +74,50 @@ export function CreateProjectDialog() {
 
     setLoading(true)
 
-    // Simulate API call
-    await new Promise((resolve) => setTimeout(resolve, 1000))
+    try {
+      const result = await projectApi.create({
+        name: formData.name,
+        client: formData.client,
+        standard: formData.standard,
+        sampleId: formData.sampleId || undefined,
+        engineerId: formData.engineerId || undefined,
+        dueDate: formData.dueDate || undefined,
+        description: formData.description || undefined,
+      })
 
-    toast({
-      title: "项目创建成功",
-      description: `项目 "${formData.name}" 已创建，项目编号: PRJ-2024-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`,
-    })
-
-    setLoading(false)
-    setOpen(false)
-    setFormData({
-      name: "",
-      client: "",
-      standard: "",
-      sampleId: "",
-      engineerId: "",
-      dueDate: "",
-      description: "",
-    })
+      if (result.code === 200) {
+        toast({
+          title: "项目创建成功",
+          description: `项目 "${formData.name}" 已创建`,
+        })
+        setOpen(false)
+        setFormData({
+          name: "",
+          client: "",
+          standard: "",
+          sampleId: "",
+          engineerId: "",
+          dueDate: "",
+          description: "",
+        })
+        // 刷新页面以显示新项目
+        router.refresh()
+      } else {
+        toast({
+          title: "创建失败",
+          description: result.message || "请稍后重试",
+          variant: "destructive",
+        })
+      }
+    } catch (error) {
+      toast({
+        title: "创建失败",
+        description: "网络错误，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setLoading(false)
+    }
   }
 
   return (

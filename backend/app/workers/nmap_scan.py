@@ -7,6 +7,9 @@ import nmap
 import logging
 from typing import Dict, Any, Callable
 
+from app.models import ScanResult
+from app.core.database import get_sync_db
+
 logger = logging.getLogger(__name__)
 
 
@@ -108,6 +111,10 @@ def nmap_scan_worker(
             
             results['hosts'].append(host_info)
         
+        # 保存扫描结果到数据库
+        progress_callback(95, "保存扫描结果到数据库", "INFO")
+        _save_scan_result(task_id, target, scan_type, results)
+        
         # 完成
         summary = f"扫描完成: 发现{results['ports_found']}个端口, 识别{results['services_identified']}个服务"
         progress_callback(100, summary, "INFO")
@@ -140,8 +147,8 @@ def _build_nmap_args(params: Dict[str, Any]) -> str:
     scan_type = params.get('scanType', 'quick')
     
     if scan_type == 'quick':
-        # 快速扫描：Top 100端口
-        args = '-T4 --top-ports 100'
+        # 快速扫描：Top 100端口 + 服务版本检测
+        args = '-T4 --top-ports 100 -sV'
         
     elif scan_type == 'full':
         # 完整扫描：所有端口 + 服务检测
@@ -183,3 +190,41 @@ def _build_nmap_args(params: Dict[str, Any]) -> str:
             args += ' -A'
     
     return args
+
+
+def _save_scan_result(
+    task_id: str,
+    target: str,
+    scan_type: str,
+    results: Dict[str, Any]
+):
+    """
+    保存扫描结果到数据库
+    
+    Args:
+        task_id: 任务ID
+        target: 扫描目标
+        scan_type: 扫描类型
+        results: 扫描结果数据
+    """
+    db = next(get_sync_db())
+    
+    try:
+        scan_result = ScanResult(
+            task_id=task_id,
+            scan_type=f"nmap_{scan_type}",
+            target=target,
+            result=results  # JSONB字段，直接存储整个结果
+        )
+        db.add(scan_result)
+        db.commit()
+        db.refresh(scan_result)
+        
+        logger.info(f"Saved scan result {scan_result.id} for task {task_id}")
+        
+    except Exception as e:
+        db.rollback()
+        logger.error(f"Failed to save scan result: {e}")
+        # 不抛出异常，允许任务继续完成
+    finally:
+        db.close()

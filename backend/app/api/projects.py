@@ -222,3 +222,46 @@ async def get_compliance_matrix(
     
     matrix = await project_service.generate_compliance_matrix(db, project, standard)
     return matrix
+
+
+@router.post("/{project_id}/recalculate-progress")
+async def recalculate_project_progress(
+    project_id: uuid.UUID,
+    current_user: User = Depends(get_current_active_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Manually trigger project progress recalculation
+    
+    - Calculates progress based on task completion rate
+    - Progress = (completed tasks / total tasks) × 100
+    - Returns updated progress value
+    """
+    project = await project_service.get_project(db, project_id)
+    
+    if not project:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="Project not found"
+        )
+    
+    # Check permissions
+    if project.manager_id != current_user.id and current_user.role != "admin":
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Only project manager or admin can recalculate progress"
+        )
+    
+    # Recalculate and update progress
+    updated_project = await project_service.update_project_progress(
+        db, 
+        project_id, 
+        auto_calculate=True
+    )
+    
+    return {
+        "project_id": str(updated_project.id),
+        "progress": updated_project.progress,
+        "message": "进度已重新计算"
+    }
+

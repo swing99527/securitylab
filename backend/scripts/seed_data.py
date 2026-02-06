@@ -7,8 +7,14 @@ import asyncio
 from datetime import datetime, timedelta
 from sqlalchemy.ext.asyncio import create_async_engine, AsyncSession
 from sqlalchemy.orm import sessionmaker
+import sys
+import os
+
+# Ensure the project root directory is in the Python path
+sys.path.append(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
 from app.core.config import settings
-from app.models import User, Project, Sample, Task
+from app.models import User, Project, Sample, Task, AuditLog, Report
 from app.core.security import hash_password
 
 async def seed_database():
@@ -17,55 +23,110 @@ async def seed_database():
     async_session = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
     
     async with async_session() as session:
-        # 1. 创建用户
+        # 清理旧数据
+        print("清理旧数据...")
+        from sqlalchemy import delete
+        await session.execute(delete(AuditLog))
+        await session.execute(delete(Report))
+        await session.execute(delete(Task))
+        await session.execute(delete(Sample))
+        await session.execute(delete(Project))
+        await session.execute(delete(User))
+        await session.commit()
+
+        # 1. 创建用户（演示账号）
         print("创建用户...")
         users = [
+            # 管理员
             User(
-                email="admin@iot-lab.com",
-                password_hash=hash_password("admin123"),
-                name="系统管理员",
+                email="admin@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="张管理员",
                 role="admin",
                 department="信息安全实验室",
                 status="active"
             ),
+            # 主管
             User(
-                email="engineer1@iot-lab.com",
-                password_hash=hash_password("engineer123"),
-                name="张工程师",
-                role="engineer",
+                email="director@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="李主管",
+                role="director",
                 department="检测中心",
                 status="active"
             ),
+            # 项目经理
             User(
-                email="engineer2@iot-lab.com",
-                password_hash=hash_password("engineer123"),
-                name="李工程师",
-                role="engineer",
-                department="检测中心",
-                status="active"
-            ),
-            User(
-                email="manager@iot-lab.com",
-                password_hash=hash_password("manager123"),
+                email="manager@stuailab.com",
+                password_hash=hash_password("123456"),
                 name="王经理",
                 role="manager",
                 department="项目部",
                 status="active"
             ),
+            # 工程师
+            User(
+                email="engineer@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="陈工程师",
+                role="engineer",
+                department="检测中心",
+                status="active"
+            ),
+            # 审核员
+            User(
+                email="reviewer@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="赵审核员",
+                role="reviewer",
+                department="质量部",
+                status="active"
+            ),
+            # 签字人
+            User(
+                email="signer@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="孙签字人",
+                role="signer",
+                department="质量部",
+                status="active"
+            ),
+            # 样品管理员
+            User(
+                email="sample@stuailab.com",
+                password_hash=hash_password("123456"),
+                name="周样品员",
+                role="sample_admin",
+                department="样品库",
+                status="active"
+            ),
+            # 客户
+            User(
+                email="client@example.com",
+                password_hash=hash_password("123456"),
+                name="客户A",
+                role="client",
+                department="外部客户",
+                status="active"
+            ),
         ]
+
         
         for user in users:
             session.add(user)
         await session.commit()
         
+        
         # 刷新以获取ID
         for user in users:
             await session.refresh(user)
         
-        admin_user = users[0]
-        engineer1 = users[1]
-        engineer2 = users[2]
-        manager_user = users[3]
+        admin_user = users[0]  # 管理员
+        director_user = users[1]  # 主管
+        manager_user = users[2]  # 项目经理
+        engineer_user = users[3]  # 工程师
+        reviewer_user = users[4]  # 审核员
+
         
         # 2. 创建项目
         print("创建项目...")
@@ -117,7 +178,7 @@ async def seed_database():
                 standard="EN 18031, ISO 27001",
                 status="completed",
                 progress=100,
-                manager_id=engineer1.id,
+                manager_id=engineer_user.id,
                 deadline=datetime.now() - timedelta(days=5),
             ),
         ]
@@ -239,7 +300,7 @@ async def seed_database():
                 progress=100,
                 project_id=projects[0].id,
                 sample_id=samples[0].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"target": "192.168.1.100", "ports": "1-65535"},
                 start_time=datetime.now() - timedelta(days=2),
                 end_time=datetime.now() - timedelta(days=1, hours=20),
@@ -253,33 +314,33 @@ async def seed_database():
                 progress=65,
                 project_id=projects[0].id,
                 sample_id=samples[0].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"firmware_path": "/uploads/xiaomi_lock_v2.3.bin"},
                 start_time=datetime.now() - timedelta(hours=5),
             ),
             Task(
                 code="TASK-IOT-2025-0001-003",
                 name="蓝牙协议测试",
-                type="protocol_test",
-                status="pending",
+                type="fuzzing",
+                status="queued",
                 priority="medium",
                 progress=0,
                 project_id=projects[0].id,
                 sample_id=samples[0].id,
-                assignee_id=engineer2.id,
+                assignee_id=engineer_user.id,
                 config={"protocol": "BLE 5.0"},
             ),
             # AI玩具项目任务
             Task(
                 code="TASK-IOT-2025-0002-001",
                 name="Wi-Fi安全检测",
-                type="wifi_security",
+                type="pentest",
                 status="completed",
                 priority="high",
                 progress=100,
                 project_id=projects[1].id,
                 sample_id=samples[2].id,
-                assignee_id=engineer2.id,
+                assignee_id=engineer_user.id,
                 config={"ssid": "DJI-RMS1", "encryption": "WPA2"},
                 start_time=datetime.now() - timedelta(days=3),
                 end_time=datetime.now() - timedelta(days=2),
@@ -287,13 +348,13 @@ async def seed_database():
             Task(
                 code="TASK-IOT-2025-0002-002",
                 name="视觉AI算法安全评估",
-                type="ai_security",
+                type="pentest",
                 status="running",
                 priority="high",
                 progress=40,
                 project_id=projects[1].id,
                 sample_id=samples[2].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"model_type": "YOLOv5"},
                 start_time=datetime.now() - timedelta(hours=8),
             ),
@@ -301,63 +362,63 @@ async def seed_database():
                 code="TASK-IOT-2025-0002-003",
                 name="模糊测试-无人机通信",
                 type="fuzzing",
-                status="pending",
+                status="queued",
                 priority="medium",
                 progress=0,
                 project_id=projects[1].id,
                 sample_id=samples[3].id,
-                assignee_id=engineer2.id,
+                assignee_id=engineer_user.id,
                 config={"target_protocol": "MAVLink"},
             ),
             # 智能摄像头项目任务
             Task(
                 code="TASK-IOT-2025-0003-001",
                 name="RTSP流安全测试",
-                type="protocol_test",
-                status="pending",
+                type="fuzzing",
+                status="queued",
                 priority="high",
                 progress=0,
                 project_id=projects[2].id,
                 sample_id=samples[4].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"protocol": "RTSP", "port": 554},
             ),
             Task(
                 code="TASK-IOT-2025-0003-002",
                 name="固件逆向分析",
                 type="firmware_analysis",
-                status="pending",
+                status="queued",
                 priority="high",
                 progress=0,
                 project_id=projects[2].id,
                 sample_id=samples[4].id,
-                assignee_id=engineer2.id,
+                assignee_id=engineer_user.id,
                 config={"firmware_version": "v5.7.3"},
             ),
             # 智能音箱项目任务
             Task(
                 code="TASK-IOT-2025-0004-001",
                 name="语音隐私检测",
-                type="privacy_test",
-                status="pending",
+                type="pentest",
+                status="queued",
                 priority="medium",
                 progress=0,
                 project_id=projects[3].id,
                 sample_id=samples[6].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"test_scenarios": ["wake_word", "recording", "upload"]},
             ),
             # 智能手表项目任务（已完成）
             Task(
                 code="TASK-IOT-2025-0005-001",
                 name="健康数据安全审计",
-                type="data_security",
+                type="pentest",
                 status="completed",
                 priority="high",
                 progress=100,
                 project_id=projects[4].id,
                 sample_id=samples[7].id,
-                assignee_id=engineer1.id,
+                assignee_id=engineer_user.id,
                 config={"data_types": ["heart_rate", "sleep", "steps"]},
                 start_time=datetime.now() - timedelta(days=10),
                 end_time=datetime.now() - timedelta(days=6),

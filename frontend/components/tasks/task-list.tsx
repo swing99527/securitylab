@@ -25,6 +25,26 @@ export function TaskList() {
   const [loading, setLoading] = useState(true)
   const [refreshing, setRefreshing] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const [actioningTaskId, setActioningTaskId] = useState<string | null>(null)
+
+  const handleTaskAction = async (taskId: string, action: 'start' | 'stop' | 'restart') => {
+    setActioningTaskId(taskId)
+    try {
+      if (action === 'start') {
+        await taskApi.execute(taskId)
+      } else if (action === 'stop') {
+        await taskApi.stop(taskId)
+      } else if (action === 'restart') {
+        await taskApi.execute(taskId)
+      }
+      // Refresh task list after action
+      await fetchTasks()
+    } catch (err) {
+      console.error(`Failed to ${action} task:`, err)
+    } finally {
+      setActioningTaskId(null)
+    }
+  }
 
   const fetchTasks = async (isRefresh = false) => {
     try {
@@ -80,10 +100,12 @@ export function TaskList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">检测任务</h1>
-        <div className="flex gap-2">
+        <div className="text-sm text-muted-foreground">
+          共 {tasks.length} 个任务
+        </div>
+        <div className="flex items-center gap-2">
           <Button
             variant="outline"
             size="sm"
@@ -104,10 +126,6 @@ export function TaskList() {
           </Button>
           <CreateTaskDialog />
         </div>
-      </div>
-
-      <div className="text-sm text-muted-foreground">
-        共 {tasks.length} 个任务
       </div>
 
       <div className="grid gap-4">
@@ -135,19 +153,24 @@ export function TaskList() {
                       {task.startTime && <span>开始: {new Date(task.startTime).toLocaleString('zh-CN')}</span>}
                     </div>
                     <div className="mt-3 flex items-center gap-3">
-                      <Progress value={task.progress || 0} className="flex-1 h-2" />
-                      <span className="text-sm text-muted-foreground w-12">{task.progress || 0}%</span>
+                      <Progress value={task.status === 'completed' ? 100 : (task.progress || 0)} className="flex-1 h-2" />
+                      <span className="text-sm text-muted-foreground w-12">{task.status === 'completed' ? 100 : (task.progress || 0)}%</span>
                     </div>
                   </div>
                   <div className="flex items-center gap-2">
                     {task.status === "running" && (
-                      <Button size="sm" variant="outline" onClick={() => taskApi.pause(task.id)}>
+                      <Button size="sm" variant="outline" onClick={() => handleTaskAction(task.id, 'stop')} title="停止任务">
                         <Pause className="h-4 w-4" />
                       </Button>
                     )}
-                    {(task.status === "paused" || task.status === "pending") && (
-                      <Button size="sm" variant="outline" onClick={() => taskApi.resume(task.id)}>
+                    {(task.status === "paused" || task.status === "queued") && (
+                      <Button size="sm" variant="outline" onClick={() => handleTaskAction(task.id, 'start')} title="启动任务">
                         <Play className="h-4 w-4" />
+                      </Button>
+                    )}
+                    {(task.status === "failed" || task.status === "cancelled") && (
+                      <Button size="sm" variant="outline" onClick={() => handleTaskAction(task.id, 'restart')} title="重新运行">
+                        <RefreshCw className="h-4 w-4" />
                       </Button>
                     )}
                     <Link href={`/tasks/${task.id}`}>

@@ -65,14 +65,12 @@ export function ProjectList() {
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">项目管理</h1>
+        <div className="text-sm text-muted-foreground">
+          共 {projects.length} 个项目
+        </div>
         <CreateProjectDialog />
-      </div>
-
-      <div className="text-sm text-muted-foreground">
-        共 {projects.length} 个项目
       </div>
 
       <div className="grid gap-4">
@@ -112,10 +110,12 @@ export function ProjectList() {
                         合规矩阵
                       </Button>
                     </Link>
-                    <Button size="sm" variant="outline">
-                      <Eye className="h-4 w-4 mr-1" />
-                      详情
-                    </Button>
+                    <Link href={`/projects/${project.id}`}>
+                      <Button size="sm" variant="outline">
+                        <Eye className="h-4 w-4 mr-1" />
+                        详情
+                      </Button>
+                    </Link>
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
                         <Button size="sm" variant="ghost">
@@ -123,10 +123,81 @@ export function ProjectList() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end">
-                        <DropdownMenuItem>编辑项目</DropdownMenuItem>
-                        <DropdownMenuItem>查看报告</DropdownMenuItem>
-                        <DropdownMenuItem>导出数据</DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">删除项目</DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.location.href = `/projects/${project.id}/edit`}>
+                          编辑项目
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => window.location.href = `/projects/${project.id}/reports`}>
+                          查看报告
+                        </DropdownMenuItem>
+                        <DropdownMenuItem onClick={() => alert('导出功能开发中')}>
+                          导出数据
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={async () => {
+                            try {
+                              // Step 1: Get project details to check for related data
+                              const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+                              const token = localStorage.getItem('token')
+
+                              const detailResponse = await fetch(`${apiBaseUrl}/api/v1/projects/${project.id}`, {
+                                headers: { 'Authorization': `Bearer ${token}` }
+                              })
+
+                              if (!detailResponse.ok) {
+                                throw new Error('获取项目详情失败')
+                              }
+
+                              const projectDetail = await detailResponse.json()
+
+                              // Step 2: Build warning message
+                              let warningMessage = `确定要删除项目 "${project.name}" 吗？\n\n`
+
+                              const hasRelatedData = (
+                                (projectDetail.task_count || 0) > 0 ||
+                                (projectDetail.sample_count || 0) > 0
+                              )
+
+                              if (hasRelatedData) {
+                                warningMessage += '⚠️ 此操作将影响以下数据：\n'
+                                if (projectDetail.task_count > 0) {
+                                  warningMessage += `- ${projectDetail.task_count} 个任务将被级联删除\n`
+                                }
+                                if (projectDetail.sample_count > 0) {
+                                  warningMessage += `- ${projectDetail.sample_count} 个样品将被解除关联\n`
+                                }
+                                warningMessage += '\n此操作不可恢复！'
+                              } else {
+                                warningMessage += '此项目没有关联数据。\n\n确认删除？'
+                              }
+
+                              // Step 3: Show confirmation
+                              if (!confirm(warningMessage)) {
+                                return
+                              }
+
+                              // Step 4: Proceed with deletion
+                              const response = await fetch(`${apiBaseUrl}/api/v1/projects/${project.id}`, {
+                                method: 'DELETE',
+                                headers: {
+                                  'Authorization': `Bearer ${token}`,
+                                  'Content-Type': 'application/json'
+                                }
+                              })
+
+                              if (!response.ok) {
+                                throw new Error(`删除失败: ${response.status}`)
+                              }
+
+                              alert('项目已删除')
+                              window.location.reload()
+                            } catch (error) {
+                              alert('删除失败: ' + (error as Error).message)
+                            }
+                          }}
+                        >
+                          删除项目
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </div>

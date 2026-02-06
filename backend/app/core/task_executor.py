@@ -181,8 +181,8 @@ class TaskExecutor:
                 }
             )
             
-            # 同步状态到数据库
-            self._sync_status_to_db(task_id, "completed")
+            # 同步状态和结果到数据库
+            self._sync_status_to_db(task_id, "completed", result)
             
             logger.info(f"Task {task_id} completed successfully")
             
@@ -200,13 +200,14 @@ class TaskExecutor:
             # 同步状态到数据库
             self._sync_status_to_db(task_id, "failed")
     
-    def _sync_status_to_db(self, task_id: str, status: str):
+    def _sync_status_to_db(self, task_id: str, status: str, result: dict = None):
         """
-        同步任务状态到数据库（简化版 - 只更新status）
+        同步任务状态和结果到数据库
         
         Args:
             task_id: 任务ID (string)
             status: 任务状态
+            result: 任务结果（可选）
         """
         try:
             import uuid
@@ -220,12 +221,25 @@ class TaskExecutor:
             engine = create_engine(db_url, pool_pre_ping=True)
             
             with engine.connect() as conn:
-                # 只更新status和updated_at (Task表没有result字段)
-                query = text("""
-                    UPDATE tasks 
-                    SET status = :status, updated_at = NOW()
-                    WHERE id = :task_id
-                """)
+                # 更新status、results和updated_at
+                if result is not None:
+                    query = text("""
+                        UPDATE tasks 
+                        SET status = :status, results = :results, updated_at = NOW()
+                        WHERE id = :task_id
+                    """)
+                    params = {
+                        "status": status, 
+                        "task_id": None,  # Will be set below
+                        "results": json.dumps(result, ensure_ascii=False)
+                    }
+                else:
+                    query = text("""
+                        UPDATE tasks 
+                        SET status = :status, updated_at = NOW()
+                        WHERE id = :task_id
+                    """)
+                    params = {"status": status, "task_id": None}
                 
                 # 转换task_id为UUID
                 try:
@@ -237,8 +251,10 @@ class TaskExecutor:
                     logger.error(f"Invalid task_id format: {task_id}, error: {e}")
                     return
                 
+                params["task_id"] = task_uuid
+                
                 # 执行更新
-                result_proxy = conn.execute(query, {"status": status, "task_id": task_uuid})
+                result_proxy = conn.execute(query, params)
                 conn.commit()
                 
                 rows_affected = result_proxy.rowcount

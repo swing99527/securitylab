@@ -106,6 +106,7 @@ class Task(Base):
     priority = Column(String(20), server_default="medium")
     progress = Column(Integer, server_default="0")
     config = Column(JSONB)
+    results = Column(JSONB)  # Task execution results (e.g., firmware analysis findings)
     notes = Column(Text)
     assignee_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
     celery_task_id = Column(String(255))
@@ -118,8 +119,8 @@ class Task(Base):
     project = relationship("Project", back_populates="tasks")
     sample = relationship("Sample", backref="tasks")
     assignee = relationship("User", foreign_keys=[assignee_id])
-    scan_results = relationship("ScanResult", back_populates="task")
-    vulnerabilities = relationship("Vulnerability", back_populates="task")
+    scan_results = relationship("ScanResult", back_populates="task", cascade="all, delete-orphan")
+    vulnerabilities = relationship("Vulnerability", back_populates="task", cascade="all, delete-orphan")
     
     __table_args__ = (
         CheckConstraint(
@@ -242,6 +243,7 @@ class Report(Base):
     """Report model"""
     __tablename__ = "reports"
     
+    # Basic Information
     id = Column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     code = Column(String(50), unique=True, nullable=False)
     title = Column(String(200), nullable=False)
@@ -249,9 +251,42 @@ class Report(Base):
     version = Column(String(20), server_default="v1.0")
     status = Column(String(20), nullable=False, server_default="draft")
     content = Column(JSONB)  # Structured report content
-    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
-    reviewer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))
+    
+    # Client and Testing Organization
+    client_company = Column(String(200))  # 委托单位
+    client_contact = Column(String(100))  # 联系人
+    client_address = Column(String(300))  # 地址
+    testing_organization = Column(String(200))  # 检测机构
+    
+    # Test Object Information
+    product_name = Column(String(200))  # 产品名称
+    product_model = Column(String(100))  # 型号
+    manufacturer = Column(String(200))  # 制造商
+    manufacturer_address = Column(String(300))  # 制造商地址
+    sample_info = Column(JSONB)  # 样品信息详情 {serial_number, firmware_version, hardware_version, quantity, reception_date, condition}
+    
+    # Test Standards & Scope
+    test_standards = Column(JSONB)  # 测试标准列表 [{standard: "GB/T xxxxx", title: "..."}]
+    test_scope = Column(Text)  # 测试范围描述
+    test_methodology = Column(Text)  # 测试方法描述
+    test_limitations = Column(Text)  # 测试限制说明
+    test_period_start = Column(DateTime(timezone=True))  # 测试开始时间
+    test_period_end = Column(DateTime(timezone=True))  # 测试结束时间
+    
+    # Conclusion
+    security_rating = Column(String(20))  # Overall: excellent/good/fair/poor
+    compliance_status = Column(String(50))  # pass/fail/conditional_pass
+    certification_recommendation = Column(Text)  # 认证建议
+    conclusion = Column(Text)  # 测试结论
+    
+    # User Relationships
+    author_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # 报告编写人
+    reviewer_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # 审核人
+    tester_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # 测试工程师
+    approver_id = Column(UUID(as_uuid=True), ForeignKey("users.id"))  # 批准人
     approved_at = Column(DateTime(timezone=True))
+    
+    # Timestamps
     created_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now())
     
@@ -259,13 +294,24 @@ class Report(Base):
     project = relationship("Project", back_populates="reports")
     author = relationship("User", foreign_keys=[author_id])
     reviewer = relationship("User", foreign_keys=[reviewer_id])
+    tester = relationship("User", foreign_keys=[tester_id])
+    approver = relationship("User", foreign_keys=[approver_id])
     
     __table_args__ = (
         CheckConstraint(
             "status IN ('draft', 'pending_review', 'approved', 'rejected', 'signed')",
             name="chk_report_status"
         ),
+        CheckConstraint(
+            "security_rating IN ('excellent', 'good', 'fair', 'poor') OR security_rating IS NULL",
+            name="chk_report_security_rating"
+        ),
+        CheckConstraint(
+            "compliance_status IN ('pass', 'fail', 'conditional_pass') OR compliance_status IS NULL",
+            name="chk_report_compliance_status"
+        ),
         Index("idx_reports_project", "project_id"),
         Index("idx_reports_status", "status"),
         Index("idx_reports_code", "code"),
+        Index("idx_reports_compliance", "compliance_status"),
     )

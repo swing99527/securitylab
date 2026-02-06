@@ -131,6 +131,10 @@ class NVDClient:
                 for ref in cve.get("references", [])[:5]  # 限制前5个
             ]
             
+            # 提取CPE配置和受影响版本
+            configurations = cve.get("configurations", [])
+            affected_products = self._extract_affected_products(configurations)
+            
             results.append({
                 "cve_id": cve_id,
                 "description": description,
@@ -139,10 +143,46 @@ class NVDClient:
                 "severity": severity,
                 "published_date": published,
                 "last_modified_date": modified,
-                "references": references
+                "references": references,
+                "affected_products": affected_products  # 新增：受影响的产品和版本
             })
         
         return results
+    
+    def _extract_affected_products(self, configurations: List[Dict]) -> List[Dict]:
+        """
+        提取受影响的产品和版本信息
+        
+        Returns:
+            List of {product, vendor, version_start, version_end, ...}
+        """
+        products = []
+        
+        for config in configurations:
+            nodes = config.get("nodes", [])
+            for node in nodes:
+                cpe_matches = node.get("cpeMatch", [])
+                for cpe_match in cpe_matches:
+                    if not cpe_match.get("vulnerable", True):
+                        continue
+                    
+                    cpe_uri = cpe_match.get("criteria", "")
+                    # Parse CPE: cpe:2.3:a:vendor:product:version:...
+                    cpe_parts = cpe_uri.split(":")
+                    
+                    if len(cpe_parts) >= 5:
+                        product_info = {
+                            "vendor": cpe_parts[3] if len(cpe_parts) > 3 else "",
+                            "product": cpe_parts[4] if len(cpe_parts) > 4 else "",
+                            "version": cpe_parts[5] if len(cpe_parts) > 5 else "*",
+                            "version_start_including": cpe_match.get("versionStartIncluding"),
+                            "version_start_excluding": cpe_match.get("versionStartExcluding"),
+                            "version_end_including": cpe_match.get("versionEndIncluding"),
+                            "version_end_excluding": cpe_match.get("versionEndExcluding"),
+                        }
+                        products.append(product_info)
+        
+        return products
     
     def _get_severity(self, cvss_score: float) -> str:
         """根据CVSS评分判断严重程度"""
@@ -181,3 +221,126 @@ class NVDClient:
                 ]
         
         self._request_times.append(now)
+    
+    @staticmethod
+    def is_version_affected(service_version: str, affected_products: List[Dict]) -> bool:
+        """
+        检查服务版本是否受CVE影响
+        
+        Args:
+            service_version: 服务版本号 (如 "2.4.1", "1.19.0")
+            affected_products: CVE受影响的产品列表
+            
+        Returns:
+            True if version is affected, False otherwise
+        """
+        if not service_version or not affected_products:
+            return True  # 无版本信息时默认包含
+        
+        # 清理版本号
+        service_version = service_version.strip().lstrip('vV')
+        
+        for product in affected_products:
+            # 检查版本范围
+            if NVDClient._version_in_range(
+                service_version,
+                product.get("version_start_including"),
+                product.get("version_start_excluding"),
+                product.get("version_end_including"),
+                product.get("version_end_excluding"),
+                product.get("version")
+            ):
+                return True
+        
+        return False
+    
+    @staticmethod
+    def _version_in_range(
+        version: str,
+        start_including: Optional[str],
+        start_excluding: Optional[str],
+        end_including: Optional[str],
+        end_excluding: Optional[str],
+        exact_version: Optional[str]
+    ) -> bool:
+        """检查版本是否在范围内"""
+        try:
+            # 精确匹配
+            if exact_version and exact_version != "*" and exact_version != "-":
+                return NVDClient._compare_versions(version, exact_version) == 0
+            
+            # 范围匹配
+            if start_including:
+                if NVDClient._compare_versions(version, start_including) < 0:
+                    return False
+            
+            if start_excluding:
+                if NVDClient._compare_versions(version, start_excluding) <= 0:
+                    return False
+            
+            if end_including:
+                if NVDClient._compare_versions(version, end_including) > 0:
+                    return False
+            
+            if end_excluding:
+                if NVDClient._compare_versions(version, end_excluding) >= 0:
+                    return False
+            
+            # 如果有任何范围定义，且通过了所有检查，则在范围内
+            if any([start_including, start_excluding, end_including, end_excluding]):
+                return True
+            
+            # 无范围信息时返回True (宽松匹配)
+            return True
+            
+        except Exception:
+            # 版本比较失败时返回True (宽松匹配)
+            return True
+    
+    @staticmethod
+    def _compare_versions(v1: str, v2: str) -> int:
+        """
+        比较两个版本号
+        
+        Returns:
+            -1 if v1 < v2
+             0 if v1 == v2
+             1 if v1 > v2
+        """
+        # 清理版本号前缀
+        v1 = v1.strip().lstrip('vV')
+        v2 = v2.strip().lstrip('vV')
+        
+        def normalize(v: str) -> List[int]:
+            """将版本号转为数字列表"""
+            parts = v.replace('-', '.').replace('_', '.').split('.')
+            result = []
+            for part in parts:
+                # 尝试提取数字部分
+                num_str = ''
+                for char in part:
+                    if char.isdigit():
+                        num_str += char
+                    else:
+                        break
+                if num_str:
+                    result.append(int(num_str))
+                elif part:  # 非数字部分
+                    result.append(0)
+            return result
+        
+        v1_parts = normalize(v1)
+        v2_parts = normalize(v2)
+        
+        # 补齐长度
+        max_len = max(len(v1_parts), len(v2_parts))
+        v1_parts.extend([0] * (max_len - len(v1_parts)))
+        v2_parts.extend([0] * (max_len - len(v2_parts)))
+        
+        for a, b in zip(v1_parts, v2_parts):
+            if a < b:
+                return -1
+            elif a > b:
+                return 1
+        
+        return 0

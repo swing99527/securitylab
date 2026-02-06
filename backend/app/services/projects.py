@@ -208,6 +208,49 @@ async def get_project_stats(
     }
 
 
+async def calculate_project_progress(
+    db: AsyncSession, 
+    project_id: uuid.UUID
+) -> int:
+    """
+    Calculate project progress based on task completion rate
+    Returns: Progress percentage (0-100)
+    """
+    stats = await get_project_stats(db, project_id)
+    
+    if stats["task_count"] == 0:
+        return 0
+    
+    # Progress = (completed tasks / total tasks) × 100
+    progress = int((stats["completed_task_count"] / stats["task_count"]) * 100)
+    return min(progress, 100)  # Ensure not exceeding 100
+
+
+async def update_project_progress(
+    db: AsyncSession,
+    project_id: uuid.UUID,
+    auto_calculate: bool = True
+) -> Project:
+    """
+    Update project progress
+    - auto_calculate=True: Automatically calculate and update
+    - auto_calculate=False: Keep current manually set value
+    """
+    project = await get_project(db, project_id)
+    if not project:
+        raise ValueError(f"Project {project_id} not found")
+    
+    if auto_calculate:
+        new_progress = await calculate_project_progress(db, project_id)
+        project.progress = new_progress
+        project.updated_at = datetime.utcnow()
+        await db.commit()
+        await db.refresh(project)
+    
+    return project
+
+
+
 async def generate_compliance_matrix(
     db: AsyncSession,
     project: Project,

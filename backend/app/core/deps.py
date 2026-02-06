@@ -31,6 +31,24 @@ async def get_current_user(
     """
     Get current authenticated user from JWT token
     """
+    # TEMPORARY: Bypass authentication for testing
+    import os
+    if os.getenv("BYPASS_AUTH", "false").lower() == "true":
+        # Return the first user in the database as test user with admin role
+        stmt = select(User).limit(1)
+        result = await db.execute(stmt)
+        user = result.scalar_one_or_none()
+        if user:
+            # Override role to admin for bypass mode to allow all operations
+            user.role = "admin"
+            print(f"[AUTH BYPASS] Using test user: {user.name} (id: {user.id}, role: admin)")
+            return user
+        else:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail="No users found in database for auth bypass"
+            )
+    
     token = credentials.credentials
     
     # Verify token

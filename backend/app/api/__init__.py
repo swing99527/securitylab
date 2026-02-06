@@ -50,15 +50,17 @@ knowledge = APIRouter()
 async def list_knowledge():
     return {"articles": [], "message": "Knowledge base endpoint ready"}
 
-# Dashboard router
-dashboard = APIRouter()
+#from .auth import router as auth
+from .projects import router as projects
+from .samples import router as samples
+from .tasks import router as tasks
+#from .files import router as files
+#from .compliance import router as compliance
+#from .knowledge import router as knowledge
+from .dashboard import router as dashboard
 
-@dashboard.get("/dashboard/stats")
-async def get_stats():
-    return {"stats": {}, "message": "Dashboard endpoint ready"}
-
-# Export all routers
 router = APIRouter()
+
 router.include_router(auth)
 router.include_router(projects)
 router.include_router(samples)

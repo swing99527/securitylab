@@ -7,6 +7,7 @@ import { useAuth, getRoleMeta } from "@/lib/auth"
 import { Button } from "@/components/ui/button"
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar"
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip"
+import Image from "next/image"
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -52,7 +53,7 @@ export function Sidebar() {
       <aside
         className={cn(
           "fixed left-0 top-0 z-40 h-screen bg-sidebar-bg border-r border-sidebar-border transition-all duration-300 flex flex-col",
-          sidebarCollapsed ? "w-16" : "w-60",
+          sidebarCollapsed ? "w-16" : "w-60 lg:w-70 xl:w-80",
         )}
       >
         {/* Logo */}
@@ -64,8 +65,14 @@ export function Sidebar() {
         >
           {!sidebarCollapsed && (
             <div className="flex items-center gap-2">
-              <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-                <span className="text-primary-foreground font-bold text-sm">ST</span>
+              <div className="w-9 h-9 rounded-full bg-white border border-gray-200 flex items-center justify-center p-0.5">
+                <Image
+                  src="/log.jpg"
+                  alt="汕头人工智能实验室"
+                  width={36}
+                  height={36}
+                  className="rounded-full"
+                />
               </div>
               <div className="flex flex-col">
                 <span className="font-semibold text-sidebar-foreground text-sm leading-tight">网络测试平台</span>
@@ -74,8 +81,14 @@ export function Sidebar() {
             </div>
           )}
           {sidebarCollapsed && (
-            <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-              <span className="text-primary-foreground font-bold text-sm">ST</span>
+            <div className="w-8 h-8 rounded-full bg-white border border-gray-200 flex items-center justify-center p-0.5">
+              <Image
+                src="/log.jpg"
+                alt="汕头人工智能实验室"
+                width={32}
+                height={32}
+                className="rounded-full"
+              />
             </div>
           )}
         </div>

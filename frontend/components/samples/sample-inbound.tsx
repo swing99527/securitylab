@@ -2,18 +2,34 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Label } from "@/components/ui/label"
-import { QrCode, Package, Save, Printer, Camera, Upload } from "lucide-react"
+import { QrCode, Package, Save, Loader2 } from "lucide-react"
+import { useToast } from "@/hooks/use-toast"
+import { projectApi } from "@/lib/api"
+
+interface Project {
+  id: string
+  name: string
+  code: string
+}
 
 export function SampleInbound() {
-  const [generatedId, setGeneratedId] = useState<string | null>(null)
+  const router = useRouter()
+  const { toast } = useToast()
+  const [projects, setProjects] = useState<Project[]>([])
+  const [loading, setLoading] = useState(false)
+  const [submitting, setSubmitting] = useState(false)
+  const [createdSample, setCreatedSample] = useState<any>(null)
+
   const [formData, setFormData] = useState({
+    projectId: "",
     name: "",
     model: "",
     manufacturer: "",
@@ -26,11 +42,91 @@ export function SampleInbound() {
     notes: "",
   })
 
-  const handleSubmit = (e: React.FormEvent) => {
+  // Fetch projects on mount
+  useEffect(() => {
+    async function fetchProjects() {
+      try {
+        setLoading(true)
+        const response = await projectApi.getList({ page: 1, pageSize: 100 })
+        if (response.code === 200 && response.data) {
+          setProjects(response.data.list || [])
+        }
+      } catch (error) {
+        console.error("Failed to fetch projects:", error)
+        toast({
+          title: "错误",
+          description: "加载项目列表失败",
+          variant: "destructive",
+        })
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchProjects()
+  }, [toast])
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
-    // Generate sample ID
-    const id = `SPL-${new Date().getFullYear()}-${String(Math.floor(Math.random() * 1000)).padStart(3, "0")}`
-    setGeneratedId(id)
+
+    if (!formData.projectId) {
+      toast({
+        title: "错误",
+        description: "请选择所属项目",
+        variant: "destructive",
+      })
+      return
+    }
+
+    try {
+      setSubmitting(true)
+
+      // Get token from localStorage
+      const token = localStorage.getItem("token")
+
+      // Create sample via direct API call
+      const response = await fetch("http://localhost:8000/api/v1/samples", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "Authorization": `Bearer ${token}`,
+        },
+        body: JSON.stringify({
+          project_id: formData.projectId,
+          name: formData.name,
+          model: formData.model,
+          manufacturer: formData.manufacturer,
+          location: formData.location,
+          notes: formData.notes,
+        }),
+      })
+
+      const data = await response.json()
+
+      if (response.ok && data) {
+        setCreatedSample(data)
+
+        toast({
+          title: "✅ 样品登记成功",
+          description: `样品编号: ${data.code}`,
+        })
+
+        // Reset form after 2 seconds and navigate to samples list
+        setTimeout(() => {
+          router.push("/samples")
+        }, 2000)
+      } else {
+        throw new Error(data.detail || data.message || "创建样品失败")
+      }
+    } catch (error: any) {
+      console.error("Failed to create sample:", error)
+      toast({
+        title: "❌ 登记失败",
+        description: error.message || "创建样品时出错，请重试",
+        variant: "destructive",
+      })
+    } finally {
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -47,6 +143,34 @@ export function SampleInbound() {
             </CardHeader>
             <CardContent>
               <form onSubmit={handleSubmit} className="space-y-6">
+                {/* Project Selection */}
+                <div className="space-y-4">
+                  <h3 className="text-sm font-medium text-muted-foreground">项目归属</h3>
+                  <div className="space-y-2">
+                    <Label htmlFor="project">所属项目 *</Label>
+                    <Select
+                      value={formData.projectId}
+                      onValueChange={(v) => setFormData({ ...formData, projectId: v })}
+                      disabled={loading}
+                      required
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder={loading ? "加载中..." : "选择项目"} />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {projects.map((project) => (
+                          <SelectItem key={project.id} value={project.id}>
+                            {project.name} ({project.code})
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      ⚠️ 样品必须归属于一个项目
+                    </p>
+                  </div>
+                </div>
+
                 {/* Basic Info */}
                 <div className="space-y-4">
                   <h3 className="text-sm font-medium text-muted-foreground">基本信息</h3>
@@ -59,6 +183,7 @@ export function SampleInbound() {
                         value={formData.name}
                         onChange={(e) => setFormData({ ...formData, name: e.target.value })}
                         required
+                        disabled={submitting}
                       />
                     </div>
                     <div className="space-y-2">
@@ -69,6 +194,7 @@ export function SampleInbound() {
                         value={formData.model}
                         onChange={(e) => setFormData({ ...formData, model: e.target.value })}
                         required
+                        disabled={submitting}
                       />
                     </div>
                     <div className="space-y-2">
@@ -79,6 +205,7 @@ export function SampleInbound() {
                         value={formData.manufacturer}
                         onChange={(e) => setFormData({ ...formData, manufacturer: e.target.value })}
                         required
+                        disabled={submitting}
                       />
                     </div>
                     <div className="space-y-2">
@@ -88,6 +215,7 @@ export function SampleInbound() {
                         placeholder="请输入序列号"
                         value={formData.serialNumber}
                         onChange={(e) => setFormData({ ...formData, serialNumber: e.target.value })}
+                        disabled={submitting}
                       />
                     </div>
                   </div>
@@ -154,6 +282,8 @@ export function SampleInbound() {
                       <Select
                         value={formData.location}
                         onValueChange={(v) => setFormData({ ...formData, location: v })}
+                        disabled={submitting}
+                        required
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="选择存放位置" />
@@ -170,20 +300,8 @@ export function SampleInbound() {
                   </div>
                 </div>
 
-                {/* Images */}
-                <div className="space-y-4">
-                  <h3 className="text-sm font-medium text-muted-foreground">样品图片</h3>
-                  <div className="grid grid-cols-3 gap-4">
-                    <div className="aspect-video bg-muted/50 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-colors">
-                      <Upload className="h-6 w-6 text-muted-foreground mb-1" />
-                      <span className="text-xs text-muted-foreground">上传图片</span>
-                    </div>
-                    <div className="aspect-video bg-muted/50 rounded-lg border-2 border-dashed flex flex-col items-center justify-center cursor-pointer hover:bg-muted transition-colors">
-                      <Camera className="h-6 w-6 text-muted-foreground mb-1" />
-                      <span className="text-xs text-muted-foreground">拍照</span>
-                    </div>
-                  </div>
-                </div>
+
+                {/* Images - Removed for now */}
 
                 {/* Notes */}
                 <div className="space-y-2">
@@ -193,14 +311,25 @@ export function SampleInbound() {
                     placeholder="请输入备注信息..."
                     value={formData.notes}
                     onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                    disabled={submitting}
                   />
                 </div>
 
+
                 {/* Actions */}
                 <div className="flex gap-3">
-                  <Button type="submit" className="flex-1">
-                    <Save className="h-4 w-4 mr-2" />
-                    登记入库
+                  <Button type="submit" className="flex-1" disabled={submitting || loading}>
+                    {submitting ? (
+                      <>
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        登记中...
+                      </>
+                    ) : (
+                      <>
+                        <Save className="h-4 w-4 mr-2" />
+                        登记入库
+                      </>
+                    )}
                   </Button>
                 </div>
               </form>
@@ -218,23 +347,24 @@ export function SampleInbound() {
               </CardTitle>
             </CardHeader>
             <CardContent className="flex flex-col items-center">
-              {generatedId ? (
+              {createdSample ? (
                 <>
                   <div className="w-48 h-48 bg-white p-4 rounded-lg border">
-                    <img
-                      src={`/qr-code-.jpg?height=160&width=160&query=QR Code ${generatedId}`}
-                      alt="Generated QR Code"
-                      className="w-full h-full"
-                    />
+                    {createdSample.qr_code_url ? (
+                      <img
+                        src={createdSample.qr_code_url}
+                        alt="Generated QR Code"
+                        className="w-full h-full object-contain"
+                      />
+                    ) : (
+                      <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                        <QrCode className="h-12 w-12" />
+                      </div>
+                    )}
                   </div>
-                  <p className="text-lg font-mono font-bold mt-4">{generatedId}</p>
+                  <p className="text-lg font-mono font-bold mt-4">{createdSample.code}</p>
                   <p className="text-sm text-muted-foreground mt-1">样品编号</p>
-                  <div className="flex gap-2 mt-4 w-full">
-                    <Button variant="outline" size="sm" className="flex-1 bg-transparent">
-                      <Printer className="h-4 w-4 mr-1" />
-                      打印标签
-                    </Button>
-                  </div>
+                  <p className="text-xs text-success mt-2">✅ 登记成功</p>
                 </>
               ) : (
                 <div className="w-48 h-48 bg-muted rounded-lg flex items-center justify-center">
@@ -248,6 +378,6 @@ export function SampleInbound() {
           </Card>
         </div>
       </div>
-    </div>
+    </div >
   )
 }

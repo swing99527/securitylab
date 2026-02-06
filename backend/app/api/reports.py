@@ -56,6 +56,41 @@ async def create_report(
     except ValueError as e:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=str(e))
 
+
+@router.get("/preview-data", response_model=dict)
+async def preview_report_data(
+    project_id: UUID,
+    template: str = "gb_t_iot",
+    sample_id: UUID = None,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """
+    Preview auto-filled report metadata without creating a report.
+    Returns aggregated data from project, samples, and tasks.
+    """
+    from app.services import report_data_aggregator
+    
+    try:
+        # Aggregate data
+        metadata = await report_data_aggregator.aggregate_report_data(
+            session=db,
+            project_id=project_id,
+            template=template,
+            sample_id=sample_id
+        )
+        
+        return {
+            "success": True,
+            "metadata": metadata,
+            "message": "Data aggregated successfully from project sources"
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to aggregate data: {str(e)}"
+        )
+
 @router.get("", response_model=PaginatedResponse[ReportResponse])
 async def list_reports(
     page: int = 1,
@@ -264,6 +299,37 @@ async def reject_report(
         updated_at=report.updated_at
     )
 
+@router.post("/{report_id}/sign", response_model=ReportResponse)
+async def sign_report(
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Sign an approved report (Electronic signature)"""
+    report = await report_service.sign_report(db, report_id, current_user.id)
+    
+    if not report:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Report not found or not in approved status"
+        )
+    
+    return ReportResponse(
+        id=report.id,
+        code=report.code,
+        title=report.title,
+        project_id=report.project_id,
+        version=report.version,
+        status=report.status,
+        content=report.content,
+        author_id=report.author_id,
+        approver_id=report.approver_id,
+        approved_at=report.approved_at,
+        created_at=report.created_at,
+        updated_at=report.updated_at
+    )
+
+
 
 # Section update schema
 class SectionUpdateRequest(BaseModel):
@@ -329,3 +395,42 @@ async def update_section_content(
         "message": "Section content updated successfully",
         "section_id": section_id
     }
+
+
+@router.get("/{report_id}/export/pdf")
+async def export_report_pdf(
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Export report as PDF"""
+    from fastapi.responses import Response
+    from urllib.parse import quote
+    
+    try:
+        # Generate PDF
+        pdf_bytes = await report_service.export_report_pdf(db, report_id)
+        
+        # Get report to build filename
+        report = await report_service.get_report(db, report_id)
+        filename = f"{report.code}_{report.title}.pdf" if report else "report.pdf"
+        
+        # Encode filename for Content-Disposition header (RFC 5987)
+        # Use both filename and filename* for better browser compatibility
+        encoded_filename = quote(filename.encode('utf-8'))
+        
+        # Return PDF as downloadable file
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={
+                "Content-Disposition": f"attachment; filename=\"report.pdf\"; filename*=UTF-8''{encoded_filename}"
+            }
+        )
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"PDF generation failed: {str(e)}"
+        )

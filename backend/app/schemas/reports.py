@@ -12,6 +12,33 @@ class ReportBase(BaseModel):
     project_id: UUID
     version: Optional[str] = "v1.0"
     content: Optional[dict] = None
+    
+    # Client and Testing Organization
+    client_company: Optional[str] = None
+    client_contact: Optional[str] = None
+    client_address: Optional[str] = None
+    testing_organization: Optional[str] = None
+    
+    # Test Object Information
+    product_name: Optional[str] = None
+    product_model: Optional[str] = None
+    manufacturer: Optional[str] = None
+    manufacturer_address: Optional[str] = None
+    sample_info: Optional[dict] = None
+    
+    # Test Standards & Scope
+    test_standards: Optional[list] = None
+    test_scope: Optional[str] = None
+    test_methodology: Optional[str] = None
+    test_limitations: Optional[str] = None
+    test_period_start: Optional[datetime] = None
+    test_period_end: Optional[datetime] = None
+    
+    # Conclusion
+    security_rating: Optional[str] = None
+    compliance_status: Optional[str] = None
+    certification_recommendation: Optional[str] = None
+    conclusion: Optional[str] = None
 
 class ReportCreate(ReportBase):
     """Schema for creating a report"""
@@ -24,6 +51,37 @@ class ReportUpdate(BaseModel):
     status: Optional[str] = None
     content: Optional[dict] = None
     reviewer_id: Optional[UUID] = None
+    
+    # Client and Testing Organization
+    client_company: Optional[str] = None
+    client_contact: Optional[str] = None
+    client_address: Optional[str] = None
+    testing_organization: Optional[str] = None
+    
+    # Test Object Information
+    product_name: Optional[str] = None
+    product_model: Optional[str] = None
+    manufacturer: Optional[str] = None
+    manufacturer_address: Optional[str] = None
+    sample_info: Optional[dict] = None
+    
+    # Test Standards & Scope
+    test_standards: Optional[list] = None
+    test_scope: Optional[str] = None
+    test_methodology: Optional[str] = None
+    test_limitations: Optional[str] = None
+    test_period_start: Optional[datetime] = None
+    test_period_end: Optional[datetime] = None
+    
+    # Conclusion
+    security_rating: Optional[str] = None
+    compliance_status: Optional[str] = None
+    certification_recommendation: Optional[str] = None
+    conclusion: Optional[str] = None
+    
+    # Signature tracking
+    tester_id: Optional[UUID] = None
+    approver_id: Optional[UUID] = None
 
 class ReportResponse(ReportBase):
     """Schema for report response"""
@@ -34,6 +92,10 @@ class ReportResponse(ReportBase):
     author_name: Optional[str] = None
     reviewer_id: Optional[UUID] = None
     reviewer_name: Optional[str] = None
+    tester_id: Optional[UUID] = None
+    tester_name: Optional[str] = None
+    approver_id: Optional[UUID] = None
+    approver_name: Optional[str] = None
     project_name: Optional[str] = None
     project_code: Optional[str] = None
     approved_at: Optional[datetime] = None

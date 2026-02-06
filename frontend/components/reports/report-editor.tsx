@@ -258,13 +258,61 @@ export function ReportEditor({ reportId }: ReportEditorProps) {
             <History className="h-4 w-4 mr-1" />
             版本历史
           </Button>
-          <Button variant="outline" size="sm">
-            <Eye className="h-4 w-4 mr-1" />
-            预览PDF
-          </Button>
-          <Button variant="outline" size="sm">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+                const token = localStorage.getItem('token')
+
+                const response = await fetch(`${apiBaseUrl}/api/v1/reports/${reportId}/export/pdf`, {
+                  headers: {
+                    'Authorization': `Bearer ${token}`
+                  }
+                })
+
+                if (!response.ok) {
+                  throw new Error('PDF export failed')
+                }
+
+                // Get filename from Content-Disposition header or use default
+                const contentDisposition = response.headers.get('Content-Disposition')
+                let filename = 'report.pdf'
+                if (contentDisposition) {
+                  const matches = /filename[^;=\n]*=([^;\n]*)/.exec(contentDisposition)
+                  if (matches && matches[1]) {
+                    filename = matches[1].replace(/['"]/g, '')
+                  }
+                }
+
+                // Download PDF
+                const blob = await response.blob()
+                const url = window.URL.createObjectURL(blob)
+                const a = document.createElement('a')
+                a.href = url
+                a.download = filename
+                document.body.appendChild(a)
+                a.click()
+                window.URL.revokeObjectURL(url)
+                document.body.removeChild(a)
+
+                toast({
+                  title: "导出成功",
+                  description: "PDF报告已下载",
+                })
+              } catch (error) {
+                console.error('PDF export failed:', error)
+                toast({
+                  title: "导出失败",
+                  description: "无法生成PDF报告",
+                  variant: "destructive",
+                })
+              }
+            }}
+          >
             <Download className="h-4 w-4 mr-1" />
-            导出
+            导出PDF
           </Button>
         </div>
       </div>

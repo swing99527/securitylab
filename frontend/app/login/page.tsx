@@ -11,9 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { useToast } from "@/hooks/use-toast"
 import { Checkbox } from "@/components/ui/checkbox"
+import Image from "next/image"
 import {
   Loader2,
-  Shield,
   Eye,
   EyeOff,
   Lock,
@@ -156,8 +156,15 @@ export default function LoginPage() {
         {/* 中心内容 - Logo 和品牌名称 */}
         <div className="relative z-10 flex flex-col items-center justify-center w-full px-12">
           {/* Logo */}
-          <div className="w-20 h-20 rounded-2xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-6">
-            <Shield className="h-10 w-10 text-white" />
+          <div className="w-32 h-32 rounded-full bg-white/10 backdrop-blur-sm flex items-center justify-center shadow-2xl shadow-blue-500/30 mb-6 p-2">
+            <Image
+              src="/log.jpg"
+              alt="汕头人工智能实验室"
+              width={128}
+              height={128}
+              className="rounded-full"
+              priority
+            />
           </div>
 
           {/* 品牌名称 */}
@@ -241,8 +248,15 @@ export default function LoginPage() {
         <div className="w-full max-w-md">
           {/* 移动端 Logo */}
           <div className="flex lg:hidden items-center gap-3 mb-8">
-            <div className="w-12 h-12 rounded-xl bg-gradient-to-br from-blue-500 to-cyan-500 flex items-center justify-center">
-              <Shield className="h-6 w-6 text-white" />
+            <div className="w-14 h-14 rounded-full bg-white border-2 border-blue-100 flex items-center justify-center p-1">
+              <Image
+                src="/log.jpg"
+                alt="汕头人工智能实验室"
+                width={56}
+                height={56}
+                className="rounded-full"
+                priority
+              />
             </div>
             <div>
               <h1 className="text-lg font-bold text-gray-900">网络测试平台</h1>

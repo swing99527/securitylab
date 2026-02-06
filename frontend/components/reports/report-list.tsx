@@ -35,7 +35,11 @@ const statusConfig = {
   signed: { label: "已签章", icon: CheckCircle, color: "bg-primary/10 text-primary" },
 }
 
-export function ReportList() {
+interface ReportListProps {
+  projectId?: string
+}
+
+export function ReportList({ projectId }: ReportListProps = {}) {
   const [reports, setReports] = useState<any[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
@@ -50,6 +54,7 @@ export function ReportList() {
           pageSize: 50,
           status: statusFilter === "all" ? undefined : statusFilter,
           search: searchTerm || undefined,
+          projectId: projectId || undefined,
         })
         console.log("📄 Reports response:", response)
 
@@ -67,7 +72,7 @@ export function ReportList() {
     }
 
     fetchReports()
-  }, [statusFilter, searchTerm])
+  }, [statusFilter, searchTerm, projectId])
 
   const filteredReports = reports
 

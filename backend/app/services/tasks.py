@@ -183,9 +183,22 @@ async def update_task(
     task: Task,
     update_data: TaskUpdate
 ) -> Task:
-    """Update task fields"""
+    """Update task fields and auto-update project progress if status changes"""
     update_dict = update_data.model_dump(exclude_unset=True)
     
+    # Track if status is changing to/from 'completed'
+    old_status = task.status
+    status_changed_to_completed = False
+    status_changed_from_completed = False
+    
+    if 'status' in update_dict:
+        new_status = update_dict['status']
+        if old_status != 'completed' and new_status == 'completed':
+            status_changed_to_completed = True
+        elif old_status == 'completed' and new_status != 'completed':
+            status_changed_from_completed = True
+    
+    # Update task fields
     for field, value in update_dict.items():
         setattr(task, field, value)
     
@@ -194,18 +207,38 @@ async def update_task(
     await db.commit()
     await db.refresh(task)
     
+    # Auto-update project progress if task completion status changed
+    if status_changed_to_completed or status_changed_from_completed:
+        from app.services.projects import update_project_progress
+        try:
+            await update_project_progress(db, task.project_id, auto_calculate=True)
+        except Exception as e:
+            # Log error but don't fail the task update
+            print(f"Warning: Failed to update project progress: {e}")
+    
     return task
 
 
+
 async def delete_task(db: AsyncSession, task: Task) -> Task:
-    """Soft delete task (set status to cancelled)"""
+    """Soft delete task (set status to cancelled) and update project progress"""
+    old_status = task.status
     task.status = "cancelled"
     task.updated_at = datetime.utcnow()
     
     await db.commit()
     await db.refresh(task)
     
+    # Auto-update project progress if task was completed
+    if old_status == 'completed':
+        from app.services.projects import update_project_progress
+        try:
+            await update_project_progress(db, task.project_id, auto_calculate=True)
+        except Exception as e:
+            print(f"Warning: Failed to update project progress: {e}")
+    
     return task
+
 
 
 async def execute_task(

@@ -71,12 +71,12 @@ class TaskResponse(BaseModel):
 
 class TaskDetail(TaskResponse):
     """Detailed task with config and results"""
-    config: Dict[str, Any]
-    notes: Optional[str]
-    celery_task_id: Optional[str]
+    config: Optional[Dict[str, Any]] = Field(default_factory=dict)
+    notes: Optional[str] = None
+    celery_task_id: Optional[str] = None
     project_name: str
-    sample_code: Optional[str]
-    assignee_name: Optional[str]
+    sample_code: Optional[str] = None
+    assignee_name: Optional[str] = None
     result_count: int = 0
     vulnerability_count: int = 0
 

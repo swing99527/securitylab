@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
@@ -8,7 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs"
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from "@/components/ui/dialog"
 import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { QrCode, Package, User, MapPin, ArrowRight, Download, Printer, History, Edit } from "lucide-react"
+import { QrCode, Package, User, MapPin, ArrowRight, Download, Printer, History, Edit, Loader2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface TimelineEvent {
@@ -73,27 +73,53 @@ interface SampleDetailProps {
 
 export function SampleDetail({ sampleId }: SampleDetailProps) {
   const [showTransferDialog, setShowTransferDialog] = useState(false)
+  const [sample, setSample] = useState<any>(null)
+  const [loading, setLoading] = useState(true)
+  const [error, setError] = useState<string | null>(null)
 
-  // Mock sample data
-  const sample = {
-    id: sampleId,
-    name: "智能门锁主控板",
-    model: "SL-200A",
-    manufacturer: "安防科技",
-    serialNumber: "SN2024120100001",
-    status: "in_use" as const,
-    location: "屏蔽室A",
-    currentHolder: "张工程师",
-    project: "PRJ-2024-001",
-    projectName: "智能门锁安全检测",
-    inDate: "2024-12-01",
-    specs: {
-      category: "IoT设备",
-      voltage: "DC 5V",
-      interface: "UART/SPI/I2C",
-      firmware: "v2.3.1",
-    },
-    images: ["/-------.jpg"],
+  // Fetch sample detail from API
+  useEffect(() => {
+    async function fetchSample() {
+      try {
+        setLoading(true)
+        const token = localStorage.getItem('token')
+        const response = await fetch(`http://localhost:8000/api/v1/samples/${sampleId}`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        })
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch sample')
+        }
+
+        const data = await response.json()
+        setSample(data)
+      } catch (err) {
+        console.error('Error fetching sample:', err)
+        setError('加载样品详情失败')
+      } finally {
+        setLoading(false)
+      }
+    }
+    fetchSample()
+  }, [sampleId])
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-primary" />
+        <span className="ml-2">加载样品详情中...</span>
+      </div>
+    )
+  }
+
+  if (error || !sample) {
+    return (
+      <div className="text-center py-12 text-destructive">
+        <p>{error || "样品不存在"}</p>
+      </div>
+    )
   }
 
   return (
@@ -103,10 +129,18 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
         <div>
           <div className="flex items-center gap-3">
             <h1 className="text-xl font-bold">{sample.name}</h1>
-            <Badge className="bg-primary/10 text-primary border-primary/20">使用中</Badge>
+            <Badge className={cn(
+              sample.status === 'in_stock' ? 'bg-success/10 text-success border-success/20' :
+                sample.status === 'in_use' ? 'bg-primary/10 text-primary border-primary/20' :
+                  'bg-muted'
+            )}>
+              {sample.status === 'in_stock' ? '在库' :
+                sample.status === 'in_use' ? '使用中' :
+                  sample.status}
+            </Badge>
           </div>
           <p className="text-sm text-muted-foreground mt-1">
-            {sample.id} | {sample.model} | {sample.manufacturer}
+            {sample.code} | {sample.model} | {sample.manufacturer}
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -138,13 +172,19 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
             </CardHeader>
             <CardContent className="flex flex-col items-center">
               <div className="w-48 h-48 bg-white p-4 rounded-lg border">
-                <img
-                  src={`/qr-code-.jpg?height=160&width=160&query=QR Code ${sample.id}`}
-                  alt="Sample QR Code"
-                  className="w-full h-full"
-                />
+                {sample.qr_code_url ? (
+                  <img
+                    src={sample.qr_code_url}
+                    alt="Sample QR Code"
+                    className="w-full h-full"
+                  />
+                ) : (
+                  <div className="w-full h-full flex items-center justify-center text-muted-foreground">
+                    <QrCode className="h-12 w-12" />
+                  </div>
+                )}
               </div>
-              <p className="text-xs text-muted-foreground mt-2 font-mono">{sample.id}</p>
+              <p className="text-xs text-muted-foreground mt-2 font-mono">{sample.code}</p>
               <Button variant="outline" size="sm" className="mt-3 bg-transparent">
                 <Download className="h-4 w-4 mr-1" />
                 下载二维码
@@ -160,27 +200,27 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
             <CardContent className="space-y-3">
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">序列号</span>
-                <span className="font-mono">{sample.serialNumber}</span>
+                <span className="font-mono">{sample.serial_number || '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">入库日期</span>
-                <span>{sample.inDate}</span>
+                <span>{sample.created_at ? new Date(sample.created_at).toLocaleDateString('zh-CN') : '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">产品类别</span>
-                <span>{sample.specs.category}</span>
+                <span>{sample.category || '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">固件版本</span>
-                <span>{sample.specs.firmware}</span>
+                <span>{sample.firmware || '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">工作电压</span>
-                <span>{sample.specs.voltage}</span>
+                <span>{sample.voltage || '-'}</span>
               </div>
               <div className="flex justify-between text-sm">
                 <span className="text-muted-foreground">接口类型</span>
-                <span>{sample.specs.interface}</span>
+                <span>{sample.interface || '-'}</span>
               </div>
             </CardContent>
           </Card>
@@ -194,17 +234,17 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
               <div className="flex items-center gap-2 text-sm">
                 <MapPin className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">位置:</span>
-                <span className="font-medium">{sample.location}</span>
+                <span className="font-medium">{sample.location || '-'}</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <User className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">持有人:</span>
-                <span className="font-medium">{sample.currentHolder}</span>
+                <span className="font-medium">{sample.current_holder || '-'}</span>
               </div>
               <div className="flex items-center gap-2 text-sm">
                 <Package className="h-4 w-4 text-muted-foreground" />
                 <span className="text-muted-foreground">关联项目:</span>
-                <span className="font-medium">{sample.projectName}</span>
+                <span className="font-medium">{sample.project_name || '-'}</span>
               </div>
             </CardContent>
           </Card>
@@ -274,7 +314,7 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
               <Card>
                 <CardContent className="pt-6">
                   <div className="grid grid-cols-2 gap-4">
-                    {sample.images.map((img, idx) => (
+                    {(sample.images || []).map((img, idx) => (
                       <div key={idx} className="aspect-video bg-muted rounded-lg overflow-hidden">
                         <img
                           src={img || "/placeholder.svg"}

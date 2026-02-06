@@ -4,6 +4,9 @@ import { useState, useEffect } from "react"
 import { AssetTree } from "./asset-tree"
 import { NetworkTopology } from "./network-topology"
 import { FuzzingDashboard } from "./fuzzing-dashboard"
+import { FuzzingResults } from "./fuzzing-results"
+import { FirmwareResults } from "./firmware-results"
+import { VulnerabilityList } from "./vulnerability-list"
 import { TaskProgress } from "./task-progress"
 import { TerminalPanel } from "./terminal-panel"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
@@ -34,6 +37,7 @@ export function TaskCockpit({
   const [taskData, setTaskData] = useState<any>(null)
   const [taskStatus, setTaskStatus] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [vulnStats, setVulnStats] = useState<any>(null)
 
   // Fetch task data
   useEffect(() => {
@@ -52,6 +56,25 @@ export function TaskCockpit({
 
     fetchTask()
   }, [taskId])
+
+  // Fetch vulnerability statistics for vuln_scan tasks
+  useEffect(() => {
+    async function fetchVulnStats() {
+      if (!taskData || taskData.type !== 'vuln_scan') return
+
+      try {
+        const response = await fetch(`http://localhost:8000/api/v1/tasks/${taskId}/vulnerabilities?page=1&page_size=1`)
+        const data = await response.json()
+        if (data.code === 200 && data.data) {
+          setVulnStats(data.data.statistics)
+        }
+      } catch (error) {
+        console.error('Failed to fetch vuln stats:', error)
+      }
+    }
+
+    fetchVulnStats()
+  }, [taskId, taskData])
 
   // Poll task status every 2 seconds
   useEffect(() => {
@@ -115,18 +138,37 @@ export function TaskCockpit({
 
       case "nmap_scan":
         return {
-          scannedItems: taskResult.scanned_ports || 0,
-          discoveredServices: taskResult.open_ports?.length || 0,
-          foundVulns: taskResult.vulnerabilities?.length || 0,
+          scannedItems: taskResult.ports_found || 0,
+          discoveredServices: taskResult.services_identified || 0,
+          foundVulns: 0, // Nmap doesn't detect vulnerabilities directly
           testCases: 0,
         }
 
       case "fuzzing":
         return {
-          scannedItems: 0,
+          scannedItems: taskResult.total_requests || 0,
           discoveredServices: 0,
-          foundVulns: taskResult.crashes?.length || 0,
-          testCases: taskResult.test_cases || 0,
+          foundVulns: taskResult.vulnerabilities_found || 0,
+          testCases: taskResult.total_requests || 0,
+        }
+
+      case "vuln_scan":
+        // Use vulnStats from database as fallback if taskResult doesn't have counts
+        return {
+          scannedItems: taskResult.services_scanned || 0,
+          foundVulns: taskResult.vulnerabilities_found || vulnStats?.total_vulnerabilities || 0,
+          criticalVulns: taskResult.critical_count || vulnStats?.critical || 0,
+          highVulns: taskResult.high_count || vulnStats?.high || 0,
+          mediumVulns: taskResult.medium_count || vulnStats?.medium || 0,
+          lowVulns: taskResult.low_count || vulnStats?.low || 0,
+        }
+
+      case "firmware_analysis":
+        return {
+          scannedItems: taskResult.extraction?.total_files || 0,
+          foundVulns: taskResult.findings?.length || 0,
+          cryptoMaterial: (taskResult.crypto?.private_keys?.length || 0) + (taskResult.crypto?.certificates?.length || 0),
+          extractedSize: taskResult.extraction?.filesystem_info?.total_size_mb || 0,
         }
 
       default:
@@ -311,10 +353,25 @@ export function TaskCockpit({
 
         {/* Middle Panel - Visualization */}
         <div className={`${taskType === "ping_scan" || taskType === "nmap_scan" ? "col-span-6" : "col-span-9"} min-h-0 flex flex-col gap-4`}>
-          <Tabs defaultValue="topology" className="flex-1 flex flex-col min-h-0">
+          <Tabs
+            defaultValue={
+              taskType === "vuln_scan" ? "vulnerabilities" :
+                taskType === "nmap_scan" ? "topology" :
+                  taskType === "fuzzing" ? "results" :
+                    "logs"
+            }
+            className="flex-1 flex flex-col min-h-0"
+          >
             <TabsList className="w-fit">
               {taskType === "nmap_scan" && <TabsTrigger value="topology">网络拓扑</TabsTrigger>}
-              {taskType === "fuzzing" && <TabsTrigger value="fuzzing">Fuzzing 监控</TabsTrigger>}
+              {taskType === "vuln_scan" && <TabsTrigger value="vulnerabilities">漏洞结果</TabsTrigger>}
+              {taskType === "fuzzing" && (
+                <>
+                  <TabsTrigger value="results">漏洞结果</TabsTrigger>
+                  <TabsTrigger value="fuzzing">性能监控</TabsTrigger>
+                </>
+              )}
+              {taskType === "firmware_analysis" && <TabsTrigger value="results">分析结果</TabsTrigger>}
               <TabsTrigger value="logs">执行日志</TabsTrigger>
             </TabsList>
 
@@ -324,9 +381,26 @@ export function TaskCockpit({
               </TabsContent>
             )}
 
+            {taskType === "vuln_scan" && (
+              <TabsContent value="vulnerabilities" className="flex-1 mt-2 min-h-0 overflow-auto">
+                <VulnerabilityList taskId={taskId} />
+              </TabsContent>
+            )}
+
             {taskType === "fuzzing" && (
-              <TabsContent value="fuzzing" className="flex-1 mt-2 min-h-0">
-                <FuzzingDashboard taskId={taskId} />
+              <>
+                <TabsContent value="fuzzing" className="flex-1 mt-2 min-h-0">
+                  <FuzzingDashboard taskId={taskId} />
+                </TabsContent>
+                <TabsContent value="results" className="flex-1 mt-2 min-h-0 overflow-auto">
+                  <FuzzingResults taskId={taskId} result={taskResult} />
+                </TabsContent>
+              </>
+            )}
+
+            {taskType === "firmware_analysis" && (
+              <TabsContent value="results" className="flex-1 mt-2 min-h-0 overflow-auto">
+                <FirmwareResults taskId={taskId} result={taskResult} />
               </TabsContent>
             )}
 
@@ -390,12 +464,62 @@ export function TaskCockpit({
               {taskType === "fuzzing" && (
                 <>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">测试用例</span>
+                    <span className="text-muted-foreground">测试请求</span>
                     <span className="font-mono">{stats.testCases}</span>
                   </div>
                   <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">发现崩溃</span>
+                    <span className="text-muted-foreground">发现漏洞</span>
                     <span className="font-mono text-destructive">{stats.foundVulns}</span>
+                  </div>
+                </>
+              )}
+
+              {taskType === "vuln_scan" && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">扫描服务</span>
+                    <span className="font-mono">{stats.scannedItems}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">总漏洞数</span>
+                    <span className="font-mono text-destructive font-bold">{stats.foundVulns}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">严重</span>
+                    <span className="font-mono text-red-600">{stats.criticalVulns || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">高危</span>
+                    <span className="font-mono text-orange-600">{stats.highVulns || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">中危</span>
+                    <span className="font-mono text-yellow-600">{stats.mediumVulns || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">低危</span>
+                    <span className="font-mono text-blue-600">{stats.lowVulns || 0}</span>
+                  </div>
+                </>
+              )}
+
+              {taskType === "firmware_analysis" && (
+                <>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">提取文件数</span>
+                    <span className="font-mono">{stats.scannedItems}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">安全发现</span>
+                    <span className="font-mono text-destructive font-bold">{stats.foundVulns}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">加密材料</span>
+                    <span className="font-mono text-yellow-600">{stats.cryptoMaterial || 0}</span>
+                  </div>
+                  <div className="flex justify-between text-sm">
+                    <span className="text-muted-foreground">文件系统大小</span>
+                    <span className="font-mono">{stats.extractedSize?.toFixed(2) || 0} MB</span>
                   </div>
                 </>
               )}
