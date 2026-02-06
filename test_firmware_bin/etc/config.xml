@@ -1,0 +1,10 @@
+<config>
+  <admin>
+    <username>admin</username>
+    <password>Admin@12345</password>
+  </admin>
+  <api>
+    <key>AKIAIOSFODNN7EXAMPLE</key>
+    <secret>wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY</secret>
+  </api>
+</config>

@@ -1,0 +1,16 @@
+"""
+Payload库初始化模块
+"""
+
+from .sql_injection import SQL_PAYLOADS, SQL_DETECTION_PATTERNS
+from .xss import XSS_PAYLOADS, XSS_DETECTION_PATTERNS
+from .path_traversal import PATH_TRAVERSAL_PAYLOADS, PATH_DETECTION_PATTERNS
+
+__all__ = [
+    'SQL_PAYLOADS',
+    'SQL_DETECTION_PATTERNS',
+    'XSS_PAYLOADS',
+    'XSS_DETECTION_PATTERNS',
+    'PATH_TRAVERSAL_PAYLOADS',
+    'PATH_DETECTION_PATTERNS',
+]

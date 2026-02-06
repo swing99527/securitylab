@@ -1,0 +1,199 @@
+# IoT Security Testing Platform - Docker Compose Configuration
+# Usage: docker-compose up -d
+
+services:
+  # ============================================================
+  # REVERSE PROXY - Nginx
+  # ============================================================
+  nginx:
+    build:
+      context: ./nginx
+      dockerfile: Dockerfile
+    container_name: iot-nginx
+    ports:
+      - "80:80"
+      - "443:443"
+    depends_on:
+      frontend:
+        condition: service_healthy
+      backend:
+        condition: service_healthy
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ============================================================
+  # FRONTEND - Next.js Application
+  # ============================================================
+  frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+      args:
+        NEXT_PUBLIC_API_BASE_URL: ""
+        NEXT_PUBLIC_USE_MOCK: "false"
+    container_name: iot-frontend
+    environment:
+      - NODE_ENV=production
+      - NEXT_PUBLIC_API_BASE_URL=
+    expose:
+      - "3000"
+    depends_on:
+      backend:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://127.0.0.1:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 30s
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+
+  # ============================================================
+  # BACKEND - FastAPI Application
+  # ============================================================
+  backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    container_name: iot-backend
+    environment:
+      - DATABASE_URL=postgresql+asyncpg://iot_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/iot_security_db
+      - SYNC_DATABASE_URL=postgresql://iot_user:${POSTGRES_PASSWORD:-secure_password_change_me}@postgres:5432/iot_security_db
+      - REDIS_URL=redis://:${REDIS_PASSWORD:-redis_dev_password_123}@redis:6379/0
+      - MINIO_ENDPOINT=minio:9000
+      - MINIO_ROOT_USER=${MINIO_ROOT_USER:-minioadmin}
+      - MINIO_ROOT_PASSWORD=${MINIO_ROOT_PASSWORD:-minioadmin123}
+      - MINIO_BUCKET=iot-files
+      - MINIO_USE_SSL=false
+      - JWT_SECRET=${JWT_SECRET:-change_this_secret_key_in_production_min_32_characters}
+      - GOTENBERG_URL=http://gotenberg:3001
+      - ENVIRONMENT=production
+    expose:
+      - "8000"
+    volumes:
+      - backend_uploads:/app/uploads
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      minio:
+        condition: service_started
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+    command: uvicorn app.main:app --host 0.0.0.0 --port 8000 --workers 2
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ============================================================
+  # DATABASE - PostgreSQL
+  # ============================================================
+  postgres:
+    image: postgres:15-alpine
+    container_name: iot-postgres
+    environment:
+      POSTGRES_DB: iot_security_db
+      POSTGRES_USER: iot_user
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-secure_password_change_me}
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ./backend/scripts/init.sql:/docker-entrypoint-initdb.d/init.sql
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U iot_user -d iot_security_db"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ============================================================
+  # CACHE - Redis
+  # ============================================================
+  redis:
+    image: redis:7-alpine
+    container_name: iot-redis
+    command: redis-server --appendonly yes --requirepass ${REDIS_PASSWORD:-redis_dev_password_123}
+    expose:
+      - "6379"
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD:-redis_dev_password_123}", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ============================================================
+  # OBJECT STORAGE - MinIO
+  # ============================================================
+  minio:
+    image: minio/minio:latest
+    container_name: iot-minio
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-minioadmin}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-minioadmin123}
+    ports:
+      - "9000:9000"   # API
+      - "9001:9001"   # Console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 30s
+      timeout: 20s
+      retries: 3
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+  # ============================================================
+  # PDF GENERATOR - Gotenberg
+  # ============================================================
+  gotenberg:
+    image: gotenberg/gotenberg:7
+    container_name: iot-gotenberg
+    command:
+      - "gotenberg"
+      - "--api-timeout=120s"
+      - "--api-port=3001"
+    expose:
+      - "3001"
+    networks:
+      - iot-network
+    restart: unless-stopped
+
+# ============================================================
+# VOLUMES
+# ============================================================
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  minio_data:
+    driver: local
+  backend_uploads:
+    driver: local
+
+# ============================================================
+# NETWORKS
+# ============================================================
+networks:
+  iot-network:
+    driver: bridge
