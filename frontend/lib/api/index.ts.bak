@@ -1,0 +1,1200 @@
+// API 模块入口 - 统一导出所有接口方法
+
+import type {
+  ApiResponse,
+  PaginatedResponse,
+  // 用户
+  User,
+  LoginRequest,
+  LoginResponse,
+  // 项目
+  Project,
+  ProjectListParams,
+  // 任务
+  Task,
+  TaskDetail,
+  TaskListParams,
+  // 报告
+  Report,
+  ReportListParams,
+  ReportAnnotation,
+  ReportReviewRequest,
+  ReportSignRequest,
+  // 样品
+  Sample,
+  SampleDetail,
+  SampleListParams,
+  SampleIntakeRequest,
+  SampleCheckoutRequest,
+  SampleReturnRequest,
+  // 合规
+  ComplianceItem,
+  ComplianceUpdateRequest,
+  // 仪表盘
+  DashboardStats,
+  HeatmapData,
+  VulnerabilityTrendData,
+  TodoItem,
+  // 通知
+  Notification,
+  // 硬件
+  HardwareStatus,
+  // Fuzzing
+  FuzzingStats,
+  FuzzingCoverage,
+  // 网络拓扑
+  NetworkTopology,
+  // 知识库
+  KnowledgeCategory,
+  Article,
+  ArticleListParams,
+  CreateArticleRequest,
+  UpdateArticleRequest,
+  ReadingHistory,
+} from "./types"
+
+import {
+  mockTasks,
+  mockProjects,
+  mockReports,
+  mockAnnotations,
+  mockSamples,
+  mockSampleFlows,
+  mockComplianceData,
+  mockDashboardStats,
+  mockHeatmapData,
+  mockVulnerabilityTrend,
+  mockTodoItems,
+  mockNotifications,
+  mockVulnerabilities,
+  mockAssets,
+  mockTaskLogs,
+  mockFuzzingStats,
+  mockFuzzingCoverage,
+  mockNetworkTopology,
+  mockKnowledgeCategories,
+  mockArticles,
+  mockReadingHistory,
+  mockStarredArticles,
+} from "./mock-data"
+
+import {
+  adaptPaginatedResponse,
+  adaptAuthResponse,
+  adaptProjectDetail,
+  adaptSampleDetail,
+  adaptTaskDetail,
+  handleApiError,
+} from "./adapter"
+
+// ==================== 配置 ====================
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL || "http://localhost:8000"
+const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true"
+
+// Debug logging
+console.log("🔍 API Configuration:", {
+  API_BASE_URL,
+  USE_MOCK,
+  ENV_VALUE: process.env.NEXT_PUBLIC_USE_MOCK,
+})
+// 模拟延迟
+const delay = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms))
+
+// 通用请求方法（生产环境使用）
+async function request<T>(endpoint: string, options?: RequestInit): Promise<any> {
+  try {
+    // 从localStorage获取token
+    const token = typeof window !== "undefined" ? localStorage.getItem("token") : null
+
+    const response = await fetch(`${API_BASE_URL}${endpoint}`, {
+      method: 'GET', // Default method
+      ...options, // Spread options to override defaults
+      headers: {
+        "Content-Type": "application/json",
+        ...(token && { Authorization: `Bearer ${token}` }),
+        ...options?.headers, // Merge custom headers
+      },
+    })
+
+    if (!response.ok) {
+      const error = await response.json().catch(() => ({}))
+
+      // 处理401未授权错误 - 自动跳转到登录页
+      if (response.status === 401) {
+        if (typeof window !== "undefined") {
+          // 清除token
+          localStorage.removeItem("token")
+          localStorage.removeItem("user")
+
+          // 跳转到登录页
+          window.location.href = "/login"
+        }
+        throw new Error("登录已过期，请重新登录")
+      }
+
+      throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    return response.json()
+  } catch (error) {
+    throw error
+  }
+}
+
+// ==================== 用户相关接口 ====================
+export const authApi = {
+  // 登录
+  async login(data: LoginRequest): Promise<ApiResponse<LoginResponse>> {
+    if (USE_MOCK) {
+      await delay(500)
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          token: "mock-token-" + Date.now(),
+          user: {
+            id: "user-001",
+            name: "张工程师",
+            role: "engineer",
+            status: "idle",
+            email: "zhang@example.com",
+          },
+        },
+      }
+    }
+
+    try {
+      const response = await request("/api/v1/auth/login", {
+        method: "POST",
+        body: JSON.stringify({ email: data.email, password: data.password }),
+      })
+      return adaptAuthResponse(response)
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取当前用户
+  async getCurrentUser(): Promise<ApiResponse<User>> {
+    if (USE_MOCK) {
+      await delay(200)
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          id: "user-001",
+          name: "张工程师",
+          role: "engineer",
+          status: "idle",
+          email: "zhang@example.com",
+        },
+      }
+    }
+
+    try {
+      const response = await request("/api/v1/auth/me")
+      return {
+        code: 200,
+        message: "success",
+        data: response,
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 登出
+  async logout(): Promise<ApiResponse<null>> {
+    await delay(200)
+    if (typeof window !== "undefined") {
+      localStorage.removeItem("token")
+    }
+    return { code: 200, message: "success", data: null }
+  },
+}
+
+// ==================== 项目相关接口 ====================
+export const projectApi = {
+  // 获取项目列表
+  async getList(params?: ProjectListParams): Promise<ApiResponse<PaginatedResponse<Project>>> {
+    if (USE_MOCK) {
+      await delay(300)
+      let list = [...mockProjects]
+      if (params?.status) {
+        list = list.filter((p) => p.status === params.status)
+      }
+      if (params?.keyword) {
+        const kw = params.keyword.toLowerCase()
+        list = list.filter((p) => p.name.toLowerCase().includes(kw) || p.id.toLowerCase().includes(kw))
+      }
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          list,
+          total: list.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+        },
+      }
+    }
+
+    try {
+      const query = new URLSearchParams({
+        ...(params?.status && { status_filter: params.status }),
+        ...(params?.keyword && { search: params.keyword }),
+        page: String(params?.page || 1),
+        page_size: String(params?.pageSize || 20),
+      })
+
+      const response = await request(`/api/v1/projects?${query}`)
+      return adaptPaginatedResponse<Project>(response)
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取项目详情
+  async getDetail(id: string): Promise<ApiResponse<Project>> {
+    if (USE_MOCK) {
+      await delay(200)
+      const project = mockProjects.find((p) => p.id === id)
+      if (!project) {
+        return { code: 404, message: "项目不存在", data: null as unknown as Project }
+      }
+      return { code: 200, message: "success", data: project }
+    }
+
+    try {
+      const response = await request(`/api/v1/projects/${id}`)
+      return {
+        code: 200,
+        message: "success",
+        data: adaptProjectDetail(response),
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+}
+
+// ==================== 任务相关接口 ====================
+export const taskApi = {
+  // 获取任务列表
+  async getList(params?: TaskListParams): Promise<ApiResponse<PaginatedResponse<Task>>> {
+    if (USE_MOCK) {
+      await delay(300)
+      let list = [...mockTasks]
+      if (params?.status) {
+        list = list.filter((t) => t.status === params.status)
+      }
+      if (params?.projectId) {
+        list = list.filter((t) => t.projectId === params.projectId)
+      }
+      if (params?.keyword) {
+        const kw = params.keyword.toLowerCase()
+        list = list.filter((t) => t.name.toLowerCase().includes(kw) || t.id.toLowerCase().includes(kw))
+      }
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          list,
+          total: list.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+        },
+      }
+    }
+
+    try {
+      const query = new URLSearchParams({
+        ...(params?.status && { status_filter: params.status }),
+        ...(params?.type && { type_filter: params.type }),
+        ...(params?.projectId && { project_id: params.projectId }),
+        ...(params?.keyword && { search: params.keyword }),
+        page: String(params?.page || 1),
+        page_size: String(params?.pageSize || 20),
+      })
+
+      const response = await request(`/api/v1/tasks?${query}`)
+      return adaptPaginatedResponse<Task>(response)
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取任务详情
+  async getDetail(id: string): Promise<ApiResponse<TaskDetail>> {
+    if (USE_MOCK) {
+      await delay(200)
+      const task = mockTasks.find((t) => t.id === id)
+      if (!task) {
+        return { code: 404, message: "任务不存在", data: null as unknown as TaskDetail }
+      }
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          ...task,
+          logs: mockTaskLogs,
+          vulnerabilities: mockVulnerabilities,
+          assets: mockAssets,
+        },
+      }
+    }
+
+    try {
+      const response = await request(`/api/v1/tasks/${id}`)
+      return {
+        code: 200,
+        message: "success",
+        data: adaptTaskDetail(response),
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 创建任务
+  async create(data: any): Promise<ApiResponse<Task>> {
+    try {
+      const response = await request('/api/v1/tasks', {
+        method: 'POST',
+        body: JSON.stringify(data)
+      })
+      return {
+        code: 201,
+        message: 'success',
+        data: response
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  async execute(id: string, force: boolean = false): Promise<ApiResponse<any>> {
+    return request(`/api/v1/tasks/${id}/execute`, {
+      method: 'POST',
+      body: JSON.stringify({ force }),
+    })
+  },
+
+  async delete(id: string): Promise<ApiResponse<void>> {
+    return request(`/api/v1/tasks/${id}`, {
+      method: 'DELETE',
+    })
+  },
+
+  // 暂停任务
+  async pause(id: string): Promise<ApiResponse<Task>> {
+    if (USE_MOCK) {
+      await delay(300)
+      const task = mockTasks.find((t) => t.id === id)
+      if (task) task.status = "paused"
+      return { code: 200, message: "success", data: task! }
+    }
+
+    try {
+      const response = await request(`/api/v1/tasks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "paused" }),
+      })
+      return { code: 200, message: "success", data: response }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 恢复任务
+  async resume(id: string): Promise<ApiResponse<Task>> {
+    if (USE_MOCK) {
+      await delay(300)
+      const task = mockTasks.find((t) => t.id === id)
+      if (task) task.status = "running"
+      return { code: 200, message: "success", data: task! }
+    }
+
+    try {
+      const response = await request(`/api/v1/tasks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "running" }),
+      })
+      return { code: 200, message: "success", data: response }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 停止任务
+  async stop(id: string): Promise<ApiResponse<Task>> {
+    if (USE_MOCK) {
+      await delay(300)
+      const task = mockTasks.find((t) => t.id === id)
+      if (task) task.status = "completed"
+      return { code: 200, message: "success", data: task! }
+    }
+
+    try {
+      const response = await request(`/api/v1/tasks/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: "cancelled" }),
+      })
+      return { code: 200, message: "success", data: response }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取任务日志
+  async getLogs(id: string, params?: { limit?: number; level?: string }): Promise<ApiResponse<{ task_id: string; total: number; logs: any[] }>> {
+    try {
+      const queryParams = new URLSearchParams()
+      if (params?.limit) queryParams.append('limit', params.limit.toString())
+      if (params?.level) queryParams.append('level', params.level)
+
+      const url = `/api/v1/tasks/${id}/logs${queryParams.toString() ? '?' + queryParams.toString() : ''}`
+      const response = await request(url)
+
+      return {
+        code: response.code || 200,
+        message: response.message || 'success',
+        data: response.data
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取 Fuzzing 统计
+  async getFuzzingStats(id: string): Promise<ApiResponse<FuzzingStats>> {
+    await delay(100)
+    return { code: 200, message: "success", data: mockFuzzingStats }
+  },
+
+  // 获取 Fuzzing 覆盖率历史
+  async getFuzzingCoverage(id: string): Promise<ApiResponse<FuzzingCoverage[]>> {
+    await delay(100)
+    return { code: 200, message: "success", data: mockFuzzingCoverage }
+  },
+
+  // 获取网络拓扑
+  async getNetworkTopology(id: string): Promise<ApiResponse<NetworkTopology>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockNetworkTopology }
+  },
+
+  // 获取任务实时状态（从Redis）
+  async getStatus(id: string): Promise<ApiResponse<any>> {
+    try {
+      const response = await request(`/api/v1/tasks/${id}/status`)
+      return {
+        code: 200,
+        message: "success",
+        data: response
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+}
+
+// ==================== 报告相关接口 ====================
+export const reportApi = {
+
+  // 创建报告
+
+    return {
+      code: 201,
+      message: "success",
+      data: {
+        ...response,
+        projectName: response.project_name,
+        authorId: response.author_id,
+        reviewerId: response.reviewer_id,
+        createdAt: response.created_at,
+        updatedAt: response.updated_at,
+        approvedAt: response.approved_at,
+        content: response.content
+      }
+    }
+  },
+  // 获取报告列表
+  async getList(params?: ReportListParams): Promise<ApiResponse<PaginatedResponse<Report>>> {
+    if (USE_MOCK) {
+      await delay(300)
+      let list = [...mockReports]
+      if (params?.status) {
+        list = list.filter((r) => r.status === params.status)
+      }
+      if (params?.projectId) {
+        list = list.filter((r) => r.projectId === params.projectId)
+      }
+      if (params?.keyword) {
+        const kw = params.keyword.toLowerCase()
+        list = list.filter((r) => r.title.toLowerCase().includes(kw) || r.id.toLowerCase().includes(kw))
+      }
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          list,
+          total: list.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+        },
+      }
+    }
+
+    // 真实API调用
+    const queryParams = new URLSearchParams()
+    if (params?.page) queryParams.append("page", params.page.toString())
+    if (params?.pageSize) queryParams.append("page_size", params.pageSize.toString())
+    if (params?.status) queryParams.append("status_filter", params.status)
+    if (params?.projectId) queryParams.append("project_id", params.projectId)
+    if (params?.keyword) queryParams.append("search", params.keyword)
+
+    const response = await request(`/api/v1/reports?${queryParams}`)
+    return adaptPaginatedResponse(response)
+  },
+
+  // 获取报告详情
+  async getDetail(id: string): Promise<ApiResponse<Report>> {
+    if (USE_MOCK) {
+      await delay(200)
+      const report = mockReports.find((r) => r.id === id)
+      if (!report) {
+        return { code: 404, message: "报告不存在", data: null as unknown as Report }
+      }
+      return { code: 200, message: "success", data: report }
+    }
+
+    // 真实API调用
+    const response = await request(`/api/v1/reports/${id}`)
+
+    // 转换response的键从snake_case到camelCase
+    const transformedData = {
+      ...response,
+      projectName: response.project_name,
+      authorId: response.author_id,
+      reviewerId: response.reviewer_id,
+      createdAt: response.created_at,
+      updatedAt: response.updated_at,
+      approvedAt: response.approved_at,
+      // content保持原样,因为它是JSONB，sections已经在里面了
+      content: response.content
+    }
+
+    return {
+      code: 200,
+      message: "success",
+      data: transformedData
+    }
+  },
+
+  // 获取报告批注
+  async getAnnotations(reportId: string): Promise<ApiResponse<ReportAnnotation[]>> {
+    await delay(200)
+    const annotations = mockAnnotations.filter((a) => a.reportId === reportId)
+    return { code: 200, message: "success", data: annotations }
+  },
+
+  // 添加批注
+  async addAnnotation(
+    reportId: string,
+    data: { sectionId: string; content: string },
+  ): Promise<ApiResponse<ReportAnnotation>> {
+    await delay(300)
+    const newAnnotation: ReportAnnotation = {
+      id: "ann-" + Date.now(),
+      reportId,
+      sectionId: data.sectionId,
+      content: data.content,
+      author: "当前用户",
+      authorId: "user-001",
+      createdAt: new Date().toISOString(),
+      resolved: false,
+      replies: [],
+    }
+    return { code: 200, message: "success", data: newAnnotation }
+  },
+
+  // 提交审核
+  async submitForReview(id: string): Promise<ApiResponse<Report>> {
+    await delay(300)
+    const report = mockReports.find((r) => r.id === id)
+    if (report) report.status = "pending_review"
+    return { code: 200, message: "success", data: report! }
+  },
+
+  // 审核报告
+  async review(id: string, data: ReportReviewRequest): Promise<ApiResponse<Report>> {
+    await delay(300)
+    const report = mockReports.find((r) => r.id === id)
+    if (report) {
+      report.status = data.action === "approve" ? "approved" : "rejected"
+    }
+    return { code: 200, message: "success", data: report! }
+  },
+
+  // 电子签章
+  async sign(id: string, data: ReportSignRequest): Promise<ApiResponse<Report>> {
+    await delay(500)
+    // 模拟密码验证
+    if (data.password !== "123456") {
+      return { code: 401, message: "密码错误", data: null as unknown as Report }
+    }
+    const report = mockReports.find((r) => r.id === id)
+    if (report) report.status = "signed"
+    return { code: 200, message: "签署成功", data: report! }
+  },
+
+  // 更新章节内容
+  async updateSection(
+    reportId: string,
+    sectionId: string,
+    content: string
+  ): Promise<ApiResponse<any>> {
+    if (USE_MOCK) {
+      await delay(500)
+      return { code: 200, message: "success", data: { success: true } }
+    }
+
+    // 真实API调用
+    const response = await request(`/api/v1/reports/${reportId}/sections/${sectionId}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    })
+
+    return {
+      code: 200,
+      message: "success",
+      data: response
+    }
+  },
+
+  // 导出PDF
+  async exportPdf(id: string): Promise<Blob> {
+    await delay(1000)
+    // 模拟返回 PDF Blob
+    return new Blob(["PDF content"], { type: "application/pdf" })
+  },
+}
+
+// ==================== 样品相关接口 ====================
+export const sampleApi = {
+  // 获取样品列表
+  async getList(params?: SampleListParams): Promise<ApiResponse<PaginatedResponse<Sample>>> {
+    if (USE_MOCK) {
+      await delay(300)
+      let list = [...mockSamples]
+      if (params?.status) {
+        list = list.filter((s) => s.status === params.status)
+      }
+      if (params?.location) {
+        list = list.filter((s) => s.location.includes(params.location!))
+      }
+      if (params?.keyword) {
+        const kw = params.keyword.toLowerCase()
+        list = list.filter(
+          (s) =>
+            s.name.toLowerCase().includes(kw) || s.id.toLowerCase().includes(kw) || s.model.toLowerCase().includes(kw),
+        )
+      }
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          list,
+          total: list.length,
+          page: params?.page || 1,
+          pageSize: params?.pageSize || 10,
+        },
+      }
+    }
+
+    try {
+      const query = new URLSearchParams({
+        ...(params?.status && { status_filter: params.status }),
+        ...(params?.location && { search: params.location }),
+        ...(params?.keyword && { search: params.keyword }),
+        page: String(params?.page || 1),
+        page_size: String(params?.pageSize || 20),
+      })
+
+      const response = await request(`/api/v1/samples?${query}`)
+      return adaptPaginatedResponse<Sample>(response)
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 获取样品详情（含流转记录）
+  async getDetail(id: string): Promise<ApiResponse<SampleDetail>> {
+    if (USE_MOCK) {
+      await delay(200)
+      const sample = mockSamples.find((s) => s.id === id)
+      if (!sample) {
+        return { code: 404, message: "样品不存在", data: null as unknown as SampleDetail }
+      }
+      const flows = mockSampleFlows.filter((f) => f.sampleId === id)
+      return { code: 200, message: "success", data: { ...sample, flows } }
+    }
+
+    try {
+      const response = await request(`/api/v1/samples/${id}`)
+      return {
+        code: 200,
+        message: "success",
+        data: {
+          ...adaptSampleDetail(response),
+          flows: [], // 流转记录暂时为空，后续可从后端获取
+        },
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 样品入库
+  async intake(data: SampleIntakeRequest): Promise<ApiResponse<Sample>> {
+    if (USE_MOCK) {
+      await delay(500)
+      const newSample: Sample = {
+        id: "SPL-" + Date.now(),
+        ...data,
+        status: "in_stock",
+        inDate: new Date().toISOString().split("T")[0],
+        lastUpdated: new Date().toISOString().split("T")[0],
+      }
+      return { code: 200, message: "success", data: newSample }
+    }
+
+    try {
+      const response = await request(`/api/v1/samples`, {
+        method: "POST",
+        body: JSON.stringify(data),
+      })
+      return { code: 200, message: "success", data: response }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 样品领用
+  async checkout(data: SampleCheckoutRequest): Promise<ApiResponse<Sample>> {
+    await delay(300)
+    const sample = mockSamples.find((s) => s.id === data.sampleId)
+    if (sample) {
+      sample.status = "in_use"
+      sample.projectId = data.projectId
+    }
+    return { code: 200, message: "success", data: sample! }
+  },
+
+  // 样品归还
+  async returnSample(data: SampleReturnRequest): Promise<ApiResponse<Sample>> {
+    await delay(300)
+    const sample = mockSamples.find((s) => s.id === data.sampleId)
+    if (sample) {
+      sample.status = "in_stock"
+      sample.location = data.location
+      sample.currentHolder = undefined
+      sample.projectId = undefined
+    }
+    return { code: 200, message: "success", data: sample! }
+  },
+
+  // 样品报废
+  async scrap(id: string, reason: string): Promise<ApiResponse<Sample>> {
+    if (USE_MOCK) {
+      await delay(300)
+      const sample = mockSamples.find((s) => s.id === id)
+      if (sample) {
+        sample.status = "scrapped"
+        sample.location = "报废区"
+      }
+      return { code: 200, message: "success", data: sample! }
+    }
+
+    try {
+      const response = await request(`/api/v1/samples/${id}`, {
+        method: "DELETE",
+      })
+      return { code: 200, message: "success", data: response }
+    } catch (error) {
+      return handleApiError(error)
+    }
+  },
+
+  // 扫码查询
+  async scanQuery(code: string): Promise<ApiResponse<Sample>> {
+    await delay(200)
+    // 模拟通过二维码或条码查询样品
+    const sample = mockSamples.find((s) => s.id === code || s.serialNumber === code)
+    if (!sample) {
+      return { code: 404, message: "样品不存在", data: null as unknown as Sample }
+    }
+    return { code: 200, message: "success", data: sample }
+  },
+
+  // 获取统计数据
+  async getStats(): Promise<
+    ApiResponse<{ total: number; inStock: number; inUse: number; returned: number; scrapped: number }>
+  > {
+    await delay(100)
+    return {
+      code: 200,
+      message: "success",
+      data: {
+        total: mockSamples.length,
+        inStock: mockSamples.filter((s) => s.status === "in_stock").length,
+        inUse: mockSamples.filter((s) => s.status === "in_use").length,
+        returned: mockSamples.filter((s) => s.status === "returned").length,
+        scrapped: mockSamples.filter((s) => s.status === "scrapped").length,
+      },
+    }
+  },
+}
+
+// ==================== 合规相关接口 ====================
+export const complianceApi = {
+  // 获取合规矩阵数据
+  async getMatrix(projectId: string): Promise<ApiResponse<ComplianceItem[]>> {
+    await delay(300)
+    return { code: 200, message: "success", data: mockComplianceData }
+  },
+
+  // 更新合规项
+  async updateItem(data: ComplianceUpdateRequest): Promise<ApiResponse<ComplianceItem>> {
+    await delay(300)
+    // 递归查找并更新
+    const findAndUpdate = (items: ComplianceItem[]): ComplianceItem | null => {
+      for (const item of items) {
+        if (item.id === data.itemId) {
+          item.manualResult = data.manualResult
+          if (data.evidence) item.evidence = data.evidence
+          return item
+        }
+        if (item.children) {
+          const found = findAndUpdate(item.children)
+          if (found) return found
+        }
+      }
+      return null
+    }
+    const updated = findAndUpdate(mockComplianceData)
+    return { code: 200, message: "success", data: updated! }
+  },
+
+  // 批量通过绿色项
+  async batchPassGreen(projectId: string): Promise<ApiResponse<{ count: number }>> {
+    await delay(500)
+    let count = 0
+    const batchPass = (items: ComplianceItem[]) => {
+      for (const item of items) {
+        if (item.autoResult === "pass" && item.manualResult === "pending") {
+          item.manualResult = "pass"
+          count++
+        }
+        if (item.children) batchPass(item.children)
+      }
+    }
+    batchPass(mockComplianceData)
+    return { code: 200, message: "success", data: { count } }
+  },
+
+  // 获取统计数据
+  async getStats(
+    projectId: string,
+  ): Promise<ApiResponse<{ total: number; pass: number; fail: number; warning: number; pending: number }>> {
+    await delay(100)
+    let total = 0,
+      pass = 0,
+      fail = 0,
+      warning = 0,
+      pending = 0
+    const count = (items: ComplianceItem[]) => {
+      for (const item of items) {
+        if (!item.children || item.children.length === 0) {
+          total++
+          if (item.autoResult === "pass") pass++
+          if (item.autoResult === "fail") fail++
+          if (item.autoResult === "warning") warning++
+          if (item.autoResult === "pending") pending++
+        }
+        if (item.children) count(item.children)
+      }
+    }
+    count(mockComplianceData)
+    return { code: 200, message: "success", data: { total, pass, fail, warning, pending } }
+  },
+}
+
+// ==================== 仪表盘相关接口 ====================
+export const dashboardApi = {
+  // 获取统计数据
+  async getStats(): Promise<ApiResponse<DashboardStats>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockDashboardStats }
+  },
+
+  // 获取热力图数据
+  async getHeatmap(): Promise<ApiResponse<HeatmapData[]>> {
+    await delay(300)
+    return { code: 200, message: "success", data: mockHeatmapData }
+  },
+
+  // 获取漏洞趋势数据
+  async getVulnerabilityTrend(): Promise<ApiResponse<VulnerabilityTrendData[]>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockVulnerabilityTrend }
+  },
+
+  // 获取待办事项
+  async getTodos(): Promise<ApiResponse<TodoItem[]>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockTodoItems }
+  },
+
+  // 完成待办事项
+  async completeTodo(id: string): Promise<ApiResponse<TodoItem>> {
+    await delay(200)
+    const todo = mockTodoItems.find((t) => t.id === id)
+    if (todo) todo.completed = true
+    return { code: 200, message: "success", data: todo! }
+  },
+}
+
+// ==================== 通知相关接口 ====================
+export const notificationApi = {
+  // 获取通知列表
+  async getList(): Promise<ApiResponse<Notification[]>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockNotifications }
+  },
+
+  // 标记已读
+  async markAsRead(id: string): Promise<ApiResponse<null>> {
+    await delay(100)
+    const notif = mockNotifications.find((n) => n.id === id)
+    if (notif) notif.read = true
+    return { code: 200, message: "success", data: null }
+  },
+
+  // 全部已读
+  async markAllAsRead(): Promise<ApiResponse<null>> {
+    await delay(100)
+    mockNotifications.forEach((n) => (n.read = true))
+    return { code: 200, message: "success", data: null }
+  },
+
+  // 清空通知
+  async clearAll(): Promise<ApiResponse<null>> {
+    await delay(100)
+    mockNotifications.length = 0
+    return { code: 200, message: "success", data: null }
+  },
+}
+
+// ==================== 硬件相关接口 ====================
+export const hardwareApi = {
+  // 获取硬件状态
+  async getStatus(): Promise<ApiResponse<HardwareStatus>> {
+    await delay(100)
+    return {
+      code: 200,
+      message: "success",
+      data: {
+        wifi: "online",
+        ble: "offline",
+        zigbee: "warning",
+      },
+    }
+  },
+
+  // 重连硬件
+  async reconnect(type: "wifi" | "ble" | "zigbee"): Promise<ApiResponse<HardwareStatus>> {
+    await delay(1000)
+    return {
+      code: 200,
+      message: "success",
+      data: {
+        wifi: "online",
+        ble: "online",
+        zigbee: "online",
+      },
+    }
+  },
+}
+
+// ==================== 知识库相关接口 ====================
+export const knowledgeApi = {
+  // 获取分类列表
+  async getCategories(): Promise<ApiResponse<KnowledgeCategory[]>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockKnowledgeCategories }
+  },
+
+  // 获取文章列表
+  async getArticles(params?: ArticleListParams): Promise<ApiResponse<PaginatedResponse<Article>>> {
+    await delay(300)
+    let list = [...mockArticles]
+
+    if (params?.category) {
+      list = list.filter((a) => a.category === params.category)
+    }
+    if (params?.type) {
+      list = list.filter((a) => a.type === params.type)
+    }
+    if (params?.starred) {
+      list = list.filter((a) => mockStarredArticles.has(a.id))
+    }
+    if (params?.keyword) {
+      const kw = params.keyword.toLowerCase()
+      list = list.filter(
+        (a) =>
+          a.title.toLowerCase().includes(kw) ||
+          a.summary.toLowerCase().includes(kw) ||
+          a.tags.some((tag) => tag.toLowerCase().includes(kw)),
+      )
+    }
+
+    return {
+      code: 200,
+      message: "success",
+      data: {
+        list: list.map((a) => ({ ...a, starred: mockStarredArticles.has(a.id) })),
+        total: list.length,
+        page: params?.page || 1,
+        pageSize: params?.pageSize || 10,
+      },
+    }
+  },
+
+  // 获取文章详情
+  async getArticleDetail(id: string): Promise<ApiResponse<Article>> {
+    await delay(200)
+    const article = mockArticles.find((a) => a.id === id)
+    if (!article) {
+      return { code: 404, message: "文章不存在", data: null as unknown as Article }
+    }
+    // 增加阅读量
+    article.views++
+    return {
+      code: 200,
+      message: "success",
+      data: { ...article, starred: mockStarredArticles.has(article.id) },
+    }
+  },
+
+  // 创建文章
+  async createArticle(data: CreateArticleRequest): Promise<ApiResponse<Article>> {
+    await delay(500)
+    const newArticle: Article = {
+      id: "article-" + Date.now(),
+      ...data,
+      categoryName:
+        mockKnowledgeCategories.flatMap((c) => [c, ...(c.children || [])]).find((c) => c.id === data.category)?.name ||
+        data.category,
+      views: 0,
+      createdAt: new Date().toISOString().split("T")[0],
+      updatedAt: new Date().toISOString().split("T")[0],
+      author: "当前用户",
+      authorId: "user-001",
+      starred: false,
+    }
+    mockArticles.unshift(newArticle)
+    return { code: 200, message: "success", data: newArticle }
+  },
+
+  // 更新文章
+  async updateArticle(data: UpdateArticleRequest): Promise<ApiResponse<Article>> {
+    await delay(500)
+    const index = mockArticles.findIndex((a) => a.id === data.id)
+    if (index === -1) {
+      return { code: 404, message: "文章不存在", data: null as unknown as Article }
+    }
+    mockArticles[index] = {
+      ...mockArticles[index],
+      ...data,
+      updatedAt: new Date().toISOString().split("T")[0],
+    }
+    return { code: 200, message: "success", data: mockArticles[index] }
+  },
+
+  // 删除文章
+  async deleteArticle(id: string): Promise<ApiResponse<null>> {
+    await delay(300)
+    const index = mockArticles.findIndex((a) => a.id === id)
+    if (index !== -1) {
+      mockArticles.splice(index, 1)
+    }
+    return { code: 200, message: "success", data: null }
+  },
+
+  // 收藏/取消收藏
+  async toggleStar(id: string): Promise<ApiResponse<{ starred: boolean }>> {
+    await delay(200)
+    const isStarred = mockStarredArticles.has(id)
+    if (isStarred) {
+      mockStarredArticles.delete(id)
+    } else {
+      mockStarredArticles.add(id)
+    }
+    return { code: 200, message: "success", data: { starred: !isStarred } }
+  },
+
+  // 获取收藏列表
+  async getStarredArticles(): Promise<ApiResponse<string[]>> {
+    await delay(100)
+    return { code: 200, message: "success", data: Array.from(mockStarredArticles) }
+  },
+
+  // 获取阅读历史
+  async getReadingHistory(): Promise<ApiResponse<ReadingHistory[]>> {
+    await delay(200)
+    return { code: 200, message: "success", data: mockReadingHistory }
+  },
+
+  // 添加阅读记录
+  async addReadingHistory(articleId: string, articleTitle: string): Promise<ApiResponse<null>> {
+    await delay(100)
+    // 移除已存在的记录
+    const existingIndex = mockReadingHistory.findIndex((h) => h.articleId === articleId)
+    if (existingIndex !== -1) {
+      mockReadingHistory.splice(existingIndex, 1)
+    }
+    // 添加到最前面
+    mockReadingHistory.unshift({
+      articleId,
+      articleTitle,
+      readAt: new Date().toLocaleString("zh-CN"),
+    })
+    // 只保留最近20条
+    if (mockReadingHistory.length > 20) {
+      mockReadingHistory.pop()
+    }
+    return { code: 200, message: "success", data: null }
+  },
+
+  // 搜索文章
+  async searchArticles(keyword: string): Promise<ApiResponse<Article[]>> {
+    await delay(300)
+    const kw = keyword.toLowerCase()
+    const results = mockArticles.filter(
+      (a) =>
+        a.title.toLowerCase().includes(kw) ||
+        a.summary.toLowerCase().includes(kw) ||
+        a.content.toLowerCase().includes(kw) ||
+        a.tags.some((tag) => tag.toLowerCase().includes(kw)),
+    )
+    return { code: 200, message: "success", data: results }
+  },
+}
+
+// ==================== 导出所有 API ====================
+export * from "./types"
+
+// ==================== 导出所有 API ====================
+export * from "./types"
