@@ -175,7 +175,7 @@ export default function LoginPage() {
           {/* 平台介绍 */}
           <div className="w-full max-w-md space-y-6">
             <p className="text-slate-400 text-center text-sm leading-relaxed">
-              专业的网络安全检测与实验室管理一体化平台，提供从样品入库到检测报告全流程数字化管理
+              专业的智能玩具安全检测与实验室管理一体化平台，提供从样品入库到检测报告全流程数字化解决方案
             </p>
 
             {/* 核心功能特性 */}
@@ -448,7 +448,7 @@ export default function LoginPage() {
           </div>
 
           {/* 版权信息 */}
-          <p className="text-center text-xs text-gray-400 mt-8">© 2025 汕头人工智能实验室 · 智能玩具安全检测系统</p>
+          <p className="text-center text-xs text-gray-400 mt-8">© 2026 汕头人工智能实验室 · 智能玩具安全检测系统</p>
         </div>
       </div>
     </div>
