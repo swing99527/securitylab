@@ -3,7 +3,7 @@ import { generateText } from "ai"
 export async function POST(request: Request) {
   const { messages, context } = await request.json()
 
-  const systemPrompt = `你是汕头人工智能实验室网络测试平台的知识库助手。你的职责是：
+  const systemPrompt = `你是汕头人工智能实验室智能玩具安全检测系统的知识库助手。你的职责是：
 1. 回答用户关于网络安全检测、EN 18031 合规标准、无线电测试、固件分析等方面的问题
 2. 基于知识库中的文章内容提供准确的信息
 3. 如果问题超出知识库范围，诚实说明并提供一般性建议

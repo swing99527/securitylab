@@ -75,7 +75,7 @@ export function Sidebar() {
                 />
               </div>
               <div className="flex flex-col">
-                <span className="font-semibold text-sidebar-foreground text-sm leading-tight">网络测试平台</span>
+                <span className="font-semibold text-sidebar-foreground text-sm leading-tight">智能玩具安全检测系统</span>
                 <span className="text-[10px] text-muted-foreground leading-tight">汕头人工智能实验室</span>
               </div>
             </div>

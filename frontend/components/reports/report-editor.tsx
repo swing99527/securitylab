@@ -125,7 +125,13 @@ export function ReportEditor({ reportId }: ReportEditorProps) {
       if (response.code === 200 && response.data) {
         setReport(response.data)
         // sections are nested in content.sections
-        setSections(response.data.content?.sections || [])
+        const loadedSections = response.data.content?.sections || []
+        setSections(loadedSections)
+
+        // Auto-select first section
+        if (loadedSections.length > 0) {
+          setSelectedSection(loadedSections[0].id)
+        }
       }
     } catch (error) {
       console.error("Failed to load report:", error)

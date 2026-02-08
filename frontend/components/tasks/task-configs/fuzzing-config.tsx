@@ -29,33 +29,38 @@ interface FuzzingConfigProps {
 // 预定义的测试目标
 const TEST_TARGETS = [
     {
-        category: "本地测试应用",
+        category: "本地测试应用 (无需认证)",
         targets: [
             {
-                name: "DVWA - SQL注入页面",
-                url: "http://localhost:8080/vulnerabilities/sqli/",
-                description: "Damn Vulnerable Web App SQL注入测试",
+                name: "Juice Shop - 产品搜索 (SQL注入)",
+                url: "http://target-juiceshop:3000/rest/products/search?q=",
+                description: "OWASP Juice Shop 公开搜索接口",
                 method: "GET",
                 safe: true
             },
             {
-                name: "DVWA - XSS页面",
-                url: "http://localhost:8080/vulnerabilities/xss_r/",
-                description: "反射型XSS漏洞测试",
+                name: "Juice Shop - 用户注册 (XSS)",
+                url: "http://target-juiceshop:3000/api/Users",
+                description: "用户注册接口",
+                method: "POST",
+                safe: true
+            }
+        ]
+    },
+    {
+        category: "需手动登录 (高级)",
+        targets: [
+            {
+                name: "DVWA - SQL注入 (需Cookie)",
+                url: "http://target-dvwa:80/vulnerabilities/sqli/",
+                description: "注意：扫描前需浏览器登录获取Cookie",
                 method: "GET",
                 safe: true
             },
             {
-                name: "Juice Shop - 用户API",
-                url: "http://localhost:3000/api/users",
-                description: "OWASP Juice Shop用户接口",
-                method: "GET",
-                safe: true
-            },
-            {
-                name: "WebGoat - 登录表单",
-                url: "http://localhost:9090/WebGoat/login",
-                description: "身份验证绕过测试",
+                name: "WebGoat - 登录 (表单)",
+                url: "http://target-webgoat:8080/WebGoat/login",
+                description: "WebGoat 登录页面测试",
                 method: "POST",
                 safe: true
             }
@@ -72,9 +77,9 @@ const TEST_TARGETS = [
                 safe: true
             },
             {
-                name: "IBM 测试站",
-                url: "http://demo.testfire.net/",
-                description: "IBM AltoroMutual测试银行",
+                name: "Google Gruyere (XSS)",
+                url: "https://google-gruyere.appspot.com/123/feed.gtl",
+                description: "Google 漏洞靶场",
                 method: "GET",
                 safe: true
             }

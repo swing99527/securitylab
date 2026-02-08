@@ -228,9 +228,29 @@ export function FuzzingResults({ taskId, result }: FuzzingResultsProps) {
                                     <CheckCircle2 className="h-12 w-12 text-green-500" />
                                     <div>
                                         <h3 className="font-semibold text-lg">未发现漏洞</h3>
-                                        <p className="text-sm text-muted-foreground">
-                                            已测试 {stats.total_requests} 个请求，未发现安全漏洞
+                                        <p className="text-sm text-muted-foreground mt-2">
+                                            安全扫描已完成，目标系统表现良好。
                                         </p>
+                                    </div>
+                                    <div className="grid grid-cols-3 gap-8 mt-6 w-full max-w-lg">
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-2xl font-mono font-bold">
+                                                {(result?.duration_seconds || 0).toFixed(1)}s
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">总耗时</span>
+                                        </div>
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-2xl font-mono font-bold">
+                                                {(result?.requests_per_second || 0).toFixed(1)}
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">Req/s</span>
+                                        </div>
+                                        <div className="flex flex-col items-center">
+                                            <span className="text-2xl font-mono font-bold">
+                                                {((result?.avg_response_time || 0) * 1000).toFixed(0)}ms
+                                            </span>
+                                            <span className="text-xs text-muted-foreground">平均延迟</span>
+                                        </div>
                                     </div>
                                 </>
                             ) : (

@@ -3,7 +3,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
-/* 汕头人工智能实验室 - 网络测试平台 深色主题 */
+/* 汕头人工智能实验室 - 智能玩具安全检测系统 深色主题 */
 :root {
   --background: #f8fafc;
   --foreground: #1e293b;

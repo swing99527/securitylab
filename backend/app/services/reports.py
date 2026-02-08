@@ -959,13 +959,10 @@ async def _build_pdf_html(report: Report, session: AsyncSession) -> str:
                 </div>
                 <div class="logo">
                     <h2>汕头人工智能实验室</h2>
-                    <p>玩具安全测试中心</p>
                 </div>
             </div>
         </div>
         
-        <!-- Page Break -->
-        <div class="page-break"></div>
         
         <!-- Report Content -->
         <div class="report-content">
@@ -974,7 +971,7 @@ async def _build_pdf_html(report: Report, session: AsyncSession) -> str:
         
         <!-- Footer (appears on every page) -->
         <div class="footer">
-            <p>汕头人工智能实验室 玩具安全测试中心 | {report.code}</p>
+            <p>汕头人工智能实验室 智能玩具安全检测中心 | {report.code}</p>
         </div>
     </body>
     </html>
@@ -1023,21 +1020,21 @@ def _get_pdf_stylesheet() -> str:
         font-size: 28pt;
         font-weight: bold;
         color: #1a1a1a;
-        margin-bottom: 2cm;
+        margin-bottom: 1.5cm;
     }
     
     .report-meta {
         font-size: 12pt;
         line-height: 2;
-        margin-bottom: 3cm;
+        margin-bottom: 1.5cm;
     }
     
     .report-meta p {
-        margin: 0.5cm 0;
+        margin: 0.3cm 0;
     }
     
     .logo {
-        margin-top: 4cm;
+        margin-top: 2cm;
         font-size: 18pt;
         color: #2196F3;
     }

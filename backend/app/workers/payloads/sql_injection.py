@@ -53,6 +53,12 @@ SQL_PAYLOADS = [
     # 编码绕过
     "%27%20OR%20%271%27%3D%271",
     "&#39; OR &#39;1&#39;=&#39;1",
+    
+    # Syntax breaking (Useful for error-based detection)
+    "'))",
+    "'));",
+    "';--",
+    "'))--",
 ]
 
 # SQL错误信息检测模式
@@ -86,6 +92,7 @@ SQL_DETECTION_PATTERNS = [
     r"SQLite/JDBCDriver",
     r"SQLite.Exception",
     r"System.Data.SQLite.SQLiteException",
+    r"SQLITE_ERROR",
     
     # 通用SQL错误
     r"Warning.*SQLite3::",

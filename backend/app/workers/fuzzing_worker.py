@@ -73,9 +73,18 @@ def fuzzing_worker(
         'request_count': 0
     }
     
+    # Pre-check connectivity
+    if not _check_connectivity(target_url):
+        error_msg = f"Cannot connect to target: {target_url}. Please check if the URL is accessible from the backend container."
+        logger.error(error_msg)
+        progress_callback(100, f"扫描失败: {error_msg}", "ERROR", {})
+        return results
+        
+    results['failed_requests'] = 0
+    
     # 解析URL和参数
     parsed_url = urlparse(target_url)
-    base_params = parse_qs(parsed_url.query) if parsed_url.query else {}
+    base_params = parse_qs(parsed_url.query, keep_blank_values=True) if parsed_url.query else {}
     
     progress_callback(5, f"准备Payload库", "INFO", {})
     
@@ -83,17 +92,17 @@ def fuzzing_worker(
     payloads_map = {}
     if "sql_injection" in test_types:
         payloads_map["SQL注入"] = {
-            'payloads': SQL_PAYLOADS[:20],  # 限制数量避免太慢
+            'payloads': SQL_PAYLOADS[:100],  # 增加限制以包含更多Payload
             'patterns': SQL_DETECTION_PATTERNS
         }
     if "xss" in test_types:
         payloads_map["XSS"] = {
-            'payloads': XSS_PAYLOADS[:20],
+            'payloads': XSS_PAYLOADS[:100],
             'patterns': XSS_DETECTION_PATTERNS
         }
     if "path_traversal" in test_types:
         payloads_map["路径遍历"] = {
-            'payloads': PATH_TRAVERSAL_PAYLOADS[:20],
+            'payloads': PATH_TRAVERSAL_PAYLOADS[:100],
             'patterns': PATH_DETECTION_PATTERNS
         }
     
@@ -161,7 +170,9 @@ def fuzzing_worker(
                         }
                     )
                     
-                    if finding:
+                    if finding is False:
+                        results['failed_requests'] += 1
+                    elif finding:
                         results['vulnerabilities_found'] += 1
                         results['findings'].append(finding)
                         
@@ -210,7 +221,9 @@ def fuzzing_worker(
                     }
                 )
                 
-                if finding:
+                if finding is False:
+                    results['failed_requests'] += 1
+                elif finding:
                     results['vulnerabilities_found'] += 1
                     results['findings'].append(finding)
     
@@ -219,8 +232,12 @@ def fuzzing_worker(
     _save_scan_result(task_id, target_url, results)
     
     # 完成
-    summary = f"扫描完成: 发送 {results['total_requests']} 个请求, 发现 {results['vulnerabilities_found']} 个漏洞"
-    progress_callback(100, summary, "INFO", {})
+    status_msg = "成功" if results['vulnerabilities_found'] > 0 else "完成"
+    failed_msg = f", {results['failed_requests']} 个请求失败" if results.get('failed_requests', 0) > 0 else ""
+    summary = f"扫描{status_msg}: 发送 {results['total_requests']} 个请求, 发现 {results['vulnerabilities_found']} 个漏洞{failed_msg}"
+    
+    log_level = "WARNING" if results.get('failed_requests', 0) > 0 else "INFO"
+    progress_callback(100, summary, log_level, {})
     
     logger.info(f"Fuzzing scan completed for {target_url}: {results['vulnerabilities_found']} vulnerabilities found")
     return results
@@ -234,12 +251,12 @@ def _test_parameter(
     patterns: List[str],
     vuln_type: str,
     timeout: int
-) -> Dict[str, Any] | None:
+) -> Dict[str, Any] | bool | None:
     """
     测试单个参数
     
     Returns:
-        如果发现漏洞返回finding字典，否则返回None
+        如果发现漏洞返回finding字典，如果请求失败返回False，否则返回None
     """
     try:
         # 构造测试URL
@@ -288,7 +305,7 @@ def _test_parameter(
         
     except Exception as e:
         logger.debug(f"Request failed: {e}")
-        return None
+        return False
 
 
 def _test_url_path(
@@ -298,7 +315,7 @@ def _test_url_path(
     patterns: List[str],
     vuln_type: str,
     timeout: int
-) -> Dict[str, Any] | None:
+) -> Dict[str, Any] | bool | None:
     """
     在URL路径中测试payload
     """
@@ -333,7 +350,7 @@ def _test_url_path(
         
     except Exception as e:
         logger.debug(f"Request failed: {e}")
-        return None
+        return False
 
 
 def _get_severity(vuln_type: str) -> str:
@@ -372,3 +389,16 @@ def _save_scan_result(
         logger.error(f"Failed to save scan result: {e}")
     finally:
         db.close()
+
+
+def _check_connectivity(url: str, timeout: int = 5) -> bool:
+    """Check if the target URL is reachable"""
+    try:
+        # Extracts scheme and netloc to check base connectivity
+        parsed = urlparse(url)
+        base_url = f"{parsed.scheme}://{parsed.netloc}"
+        requests.head(base_url, timeout=timeout, verify=False)
+        return True
+    except Exception as e:
+        logger.warning(f"Connectivity check failed for {url}: {e}")
+        return False

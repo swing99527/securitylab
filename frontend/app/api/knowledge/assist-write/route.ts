@@ -20,7 +20,7 @@ export async function POST(request: Request) {
       prompt = `请检查以下内容的语法、拼写和技术准确性，并提供修改建议：\n\n${content}`
       break
     case "generate":
-      prompt = `请基于以下主题生成一篇专业的技术文章：\n\n主题: ${context?.topic || content}\n\n要求:\n1. 包含引言、主要内容和总结\n2. 使用 Markdown 格式\n3. 适当添加代码示例\n4. 针对汕头人工智能实验室网络测试平台的工程师`
+      prompt = `请基于以下主题生成一篇专业的技术文章：\n\n主题: ${context?.topic || content}\n\n要求:\n1. 包含引言、主要内容和总结\n2. 使用 Markdown 格式\n3. 适当添加代码示例\n4. 针对汕头人工智能实验室智能玩具安全检测系统的工程师`
       break
     default:
       prompt = content

@@ -8,6 +8,7 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     curl \
+    iputils-ping \
     # Security scanning tools
     nmap \
     binwalk \

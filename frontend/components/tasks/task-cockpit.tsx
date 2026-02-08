@@ -325,7 +325,21 @@ export function TaskCockpit({
             </AlertDialog>
           )}
 
-          <Button variant="outline" size="sm" disabled>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                // Force restart for completed tasks
+                await taskApi.execute(taskId, true)
+                window.location.reload()
+              } catch (error) {
+                console.error('Failed to restart task:', error)
+                alert('重启任务失败，请检查控制台')
+              }
+            }}
+            disabled={status === "running"}
+          >
             <RotateCcw className="h-4 w-4 mr-1" />
             重启
           </Button>
@@ -333,9 +347,27 @@ export function TaskCockpit({
             <Download className="h-4 w-4 mr-1" />
             导出
           </Button>
-          <Button variant="outline" size="icon" className="h-8 w-8 bg-transparent">
-            <Settings className="h-4 w-4" />
-          </Button>
+
+          <AlertDialog>
+            <AlertDialogTrigger asChild>
+              <Button variant="outline" size="icon" className="h-8 w-8 bg-transparent">
+                <Settings className="h-4 w-4" />
+              </Button>
+            </AlertDialogTrigger>
+            <AlertDialogContent className="max-w-2xl">
+              <AlertDialogHeader>
+                <AlertDialogTitle>任务配置</AlertDialogTitle>
+              </AlertDialogHeader>
+              <div className="bg-muted p-4 rounded-md overflow-auto max-h-[60vh]">
+                <pre className="text-xs font-mono whitespace-pre-wrap break-all">
+                  {JSON.stringify(taskData.config, null, 2)}
+                </pre>
+              </div>
+              <AlertDialogFooter>
+                <AlertDialogCancel>关闭</AlertDialogCancel>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
         </div>
       </div>
 

@@ -1,0 +1,48 @@
+version: '3'
+
+services:
+  # ==========================================
+  # DVWA (Damn Vulnerable Web App)
+  # Default credentials: admin / password
+  # ==========================================
+  dvwa:
+    image: vulnerables/web-dvwa
+    container_name: target-dvwa
+    ports:
+      - "8080:80"
+    networks:
+      - iot-network
+    restart: always
+
+  # ==========================================
+  # OWASP Juice Shop
+  # ==========================================
+  juiceshop:
+    image: bkimminich/juice-shop
+    container_name: target-juiceshop
+    ports:
+      - "3000:3000"
+    networks:
+      - iot-network
+    restart: always
+
+  # ==========================================
+  # WebGoat
+  # ==========================================
+  webgoat:
+    image: webgoat/webgoat
+    container_name: target-webgoat
+    ports:
+      - "8081:8080" # Maps container 8080 to host 8081 (conflict with dvwa on 8080?)
+      - "9090:9090"
+    environment:
+      - WEBGOAT_PORT=8080
+      - WEBWOLF_PORT=9090
+    networks:
+      - iot-network
+    restart: always
+
+networks:
+  iot-network:
+    external: true
+    name: securitylab_iot-network

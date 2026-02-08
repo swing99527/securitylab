@@ -168,7 +168,7 @@ export default function LoginPage() {
           </div>
 
           {/* 品牌名称 */}
-          <h1 className="text-4xl font-bold text-white tracking-wide mb-2">网络测试平台</h1>
+          <h1 className="text-4xl font-bold text-white tracking-wide mb-2">智能玩具安全检测系统</h1>
           <h2 className="text-xl text-blue-300/90 font-medium tracking-widest mb-2">汕头人工智能实验室</h2>
           <p className="text-sm text-slate-500 tracking-wider mb-10">SHANTOU AI LABORATORY</p>
 
@@ -259,7 +259,7 @@ export default function LoginPage() {
               />
             </div>
             <div>
-              <h1 className="text-lg font-bold text-gray-900">网络测试平台</h1>
+              <h1 className="text-lg font-bold text-gray-900">智能玩具安全检测系统</h1>
               <p className="text-xs text-blue-600">汕头人工智能实验室</p>
             </div>
           </div>
@@ -448,7 +448,7 @@ export default function LoginPage() {
           </div>
 
           {/* 版权信息 */}
-          <p className="text-center text-xs text-gray-400 mt-8">© 2025 汕头人工智能实验室 · 网络测试平台</p>
+          <p className="text-center text-xs text-gray-400 mt-8">© 2025 汕头人工智能实验室 · 智能玩具安全检测系统</p>
         </div>
       </div>
     </div>

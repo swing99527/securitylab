@@ -15,8 +15,8 @@ const inter = Inter({ subsets: ["latin"], variable: "--font-inter" })
 const jetbrainsMono = JetBrains_Mono({ subsets: ["latin"], variable: "--font-jetbrains" })
 
 export const metadata: Metadata = {
-  title: "网络测试平台 | 汕头人工智能实验室",
-  description: "汕头人工智能实验室 - 专业网络测试平台",
+  title: "智能玩具安全检测系统 | 汕头人工智能实验室",
+  description: "汕头人工智能实验室 - 智能玩具安全检测系统",
   generator: 'v0.app',
   icons: {
     icon: [
