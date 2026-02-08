@@ -137,7 +137,7 @@ export function ProjectList() {
                           onClick={async () => {
                             try {
                               // Step 1: Get project details to check for related data
-                              const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+                              const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
                               const token = localStorage.getItem('token')
 
                               const detailResponse = await fetch(`${apiBaseUrl}/api/v1/projects/${project.id}`, {

@@ -89,7 +89,7 @@ export function CreateReportDialog() {
   const fetchProjects = async () => {
     setLoadingProjects(true)
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
       const token = localStorage.getItem('token')
 
       const response = await fetch(`${apiBaseUrl}/api/v1/projects`, {
@@ -145,7 +145,7 @@ export function CreateReportDialog() {
   const fetchProjectStats = async (projectId: string) => {
     setLoadingStats(true)
     try {
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
       const token = localStorage.getItem('token')
 
       // Fetch tasks for this project
@@ -199,7 +199,7 @@ export function CreateReportDialog() {
 
     try {
       // Call real Preview API
-      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+      const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
       const token = localStorage.getItem('token')
 
       const response = await fetch(

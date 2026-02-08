@@ -2,7 +2,7 @@
 
 import type React from "react"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { Button } from "@/components/ui/button"
 import {
@@ -20,7 +20,7 @@ import { Textarea } from "@/components/ui/textarea"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Plus, Loader2 } from "lucide-react"
 import { useToast } from "@/hooks/use-toast"
-import { projectApi } from "@/lib/api"
+import { projectApi, authApi } from "@/lib/api"
 
 const complianceStandards = [
   { value: "en18031", label: "EN 18031 无线电设备安全" },
@@ -37,16 +37,11 @@ const mockSamples = [
   { id: "SPL-2024-004", name: "智能摄像头 C" },
 ]
 
-const mockEngineers = [
-  { id: "ENG-001", name: "张工程师" },
-  { id: "ENG-002", name: "王工程师" },
-  { id: "ENG-003", name: "李工程师" },
-  { id: "ENG-004", name: "陈工程师" },
-]
-
 export function CreateProjectDialog() {
   const [open, setOpen] = useState(false)
   const [loading, setLoading] = useState(false)
+  const [loadingUsers, setLoadingUsers] = useState(false)
+  const [users, setUsers] = useState<Array<{ id: string; name: string; role: string }>>([])
   const { toast } = useToast()
   const router = useRouter()
 
@@ -59,6 +54,31 @@ export function CreateProjectDialog() {
     dueDate: "",
     description: "",
   })
+
+  // Fetch users when dialog opens
+  useEffect(() => {
+    if (open && users.length === 0) {
+      loadUsers()
+    }
+  }, [open])
+
+  const loadUsers = async () => {
+    setLoadingUsers(true)
+    try {
+      const result = await authApi.getUsers()
+      if (result.code === 200 && result.data) {
+        // Filter to show only managers, engineers, and admins
+        const filteredUsers = result.data.filter((u: any) =>
+          ['admin', 'manager', 'engineer', 'director'].includes(u.role)
+        )
+        setUsers(filteredUsers)
+      }
+    } catch (error) {
+      console.error('Failed to load users:', error)
+    } finally {
+      setLoadingUsers(false)
+    }
+  }
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
@@ -207,14 +227,15 @@ export function CreateProjectDialog() {
                 <Select
                   value={formData.engineerId}
                   onValueChange={(value) => setFormData({ ...formData, engineerId: value })}
+                  disabled={loadingUsers}
                 >
                   <SelectTrigger>
-                    <SelectValue placeholder="选择负责工程师" />
+                    <SelectValue placeholder={loadingUsers ? "加载中..." : "选择负责工程师"} />
                   </SelectTrigger>
                   <SelectContent>
-                    {mockEngineers.map((eng) => (
-                      <SelectItem key={eng.id} value={eng.id}>
-                        {eng.name}
+                    {users.map((user) => (
+                      <SelectItem key={user.id} value={user.id}>
+                        {user.name} ({user.role})
                       </SelectItem>
                     ))}
                   </SelectContent>

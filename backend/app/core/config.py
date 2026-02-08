@@ -48,7 +48,8 @@ class Settings(BaseSettings):
     MAX_PAGE_SIZE: int = 100
     
     # MinIO (Object Storage)
-    MINIO_ENDPOINT: str = "localhost:9000"
+    MINIO_ENDPOINT: str = "localhost:9000"  # Internal Docker network access
+    MINIO_PUBLIC_URL: str = ""  # External browser access URL (e.g., http://localhost:9000)
     MINIO_ROOT_USER: str = "minioadmin"
     MINIO_ROOT_PASSWORD: str = "minioadmin123"
     MINIO_BUCKET: str = "iot-files"

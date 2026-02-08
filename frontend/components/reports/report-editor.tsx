@@ -108,6 +108,9 @@ export function ReportEditor({ reportId }: ReportEditorProps) {
   const [expandedSections, setExpandedSections] = useState<Set<string>>(new Set())
   const [showRejectDialog, setShowRejectDialog] = useState(false)
   const [showSignDialog, setShowSignDialog] = useState(false)
+  const [showPreviewDialog, setShowPreviewDialog] = useState(false)
+  const [previewLoading, setPreviewLoading] = useState(false)
+  const [previewHtml, setPreviewHtml] = useState<string>('')
   const { toast } = useToast()
 
   // 加载报告数据
@@ -263,7 +266,43 @@ export function ReportEditor({ reportId }: ReportEditorProps) {
             size="sm"
             onClick={async () => {
               try {
-                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
+                setShowPreviewDialog(true)
+                setPreviewLoading(true)
+                setPreviewHtml('')
+
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+                const token = localStorage.getItem('token')
+                const response = await fetch(`${apiBaseUrl}/api/v1/reports/${reportId}/preview/html`, {
+                  headers: { 'Authorization': `Bearer ${token}` }
+                })
+
+                if (!response.ok) {
+                  throw new Error('Preview generation failed')
+                }
+
+                const html = await response.text()
+                setPreviewHtml(html)
+                setPreviewLoading(false)
+              } catch (error) {
+                console.error('Preview failed:', error)
+                setPreviewLoading(false)
+                toast({
+                  title: "预览失败",
+                  description: "无法生成预览",
+                  variant: "destructive",
+                })
+              }
+            }}
+          >
+            <Eye className="h-4 w-4 mr-1" />
+            预览PDF
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={async () => {
+              try {
+                const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
                 const token = localStorage.getItem('token')
 
                 const response = await fetch(`${apiBaseUrl}/api/v1/reports/${reportId}/export/pdf`, {
@@ -527,6 +566,69 @@ export function ReportEditor({ reportId }: ReportEditorProps) {
           </Button>
         </div>
       </div>
+
+      {/* PDF Preview Dialog */}
+      <Dialog open={showPreviewDialog} onOpenChange={setShowPreviewDialog}>
+        <DialogContent
+          className="max-w-[67vw] w-full h-[90vh] flex flex-col p-6"
+          style={{ maxWidth: '67vw', width: '67vw', height: '90vh', maxHeight: '90vh' }}
+        >
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <Eye className="h-5 w-5" />
+              PDF预览
+            </DialogTitle>
+          </DialogHeader>
+          <div className="flex-1 min-h-0 overflow-hidden rounded-lg border bg-muted">
+            {previewLoading ? (
+              <div className="flex items-center justify-center h-full">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                <span className="ml-2 text-muted-foreground">正在生成预览...</span>
+              </div>
+            ) : (
+              <iframe
+                srcDoc={previewHtml}
+                className="w-full h-full border-0 bg-white"
+                title="PDF预览"
+              />
+            )}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowPreviewDialog(false)}>
+              关闭
+            </Button>
+            <Button
+              onClick={async () => {
+                try {
+                  const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL ?? ''
+                  const token = localStorage.getItem('token')
+                  const response = await fetch(`${apiBaseUrl}/api/v1/reports/${reportId}/export/pdf`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                  })
+                  if (!response.ok) throw new Error('PDF export failed')
+                  const blob = await response.blob()
+                  const url = window.URL.createObjectURL(blob)
+                  const a = document.createElement('a')
+                  a.href = url
+                  a.download = 'report.pdf'
+                  document.body.appendChild(a)
+                  a.click()
+                  window.URL.revokeObjectURL(url)
+                  document.body.removeChild(a)
+                  setShowPreviewDialog(false)
+                  toast({ title: "导出成功", description: "PDF报告已下载" })
+                } catch (error) {
+                  console.error('PDF export failed:', error)
+                  toast({ title: "导出失败", description: "无法生成PDF报告", variant: "destructive" })
+                }
+              }}
+            >
+              <Download className="h-4 w-4 mr-1" />
+              导出PDF
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -88,11 +88,9 @@ import {
 } from "./adapter"
 
 // ==================== 配置 ====================
-// Use empty string for relative paths when NEXT_PUBLIC_API_BASE_URL is explicitly set to ""
-// Only fallback to localhost:8000 when the env var is truly undefined
-const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL !== undefined
-  ? process.env.NEXT_PUBLIC_API_BASE_URL
-  : "http://localhost:8000"
+// Use empty string for relative paths when NEXT_PUBLIC_API_BASE_URL is set to ""
+// This allows the frontend to use nginx reverse proxy instead of direct backend connection
+const API_BASE_URL = process.env.NEXT_PUBLIC_API_BASE_URL ?? ""
 const USE_MOCK = process.env.NEXT_PUBLIC_USE_MOCK === "true"
 
 // Debug logging
@@ -138,6 +136,11 @@ async function request<T>(endpoint: string, options?: RequestInit): Promise<any>
       }
 
       throw new Error(error.detail || `HTTP ${response.status}`)
+    }
+
+    // Handle 204 No Content
+    if (response.status === 204) {
+      return null
     }
 
     return response.json()
@@ -215,6 +218,20 @@ export const authApi = {
       localStorage.removeItem("token")
     }
     return { code: 200, message: "success", data: null }
+  },
+
+  // 获取用户列表
+  async getUsers(): Promise<ApiResponse<User[]>> {
+    try {
+      const response = await request("/api/v1/users")
+      return {
+        code: 200,
+        message: "success",
+        data: response.items || response || [],
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
   },
 }
 
@@ -765,6 +782,31 @@ export const reportApi = {
     await delay(200)
     const annotations = mockAnnotations.filter((a) => a.reportId === reportId)
     return { code: 200, message: "success", data: annotations }
+  },
+
+  // 删除报告
+  async delete(id: string): Promise<ApiResponse<void>> {
+    if (USE_MOCK) {
+      await delay(500)
+      const index = mockReports.findIndex((r) => r.id === id)
+      if (index > -1) {
+        mockReports.splice(index, 1)
+      }
+      return { code: 200, message: "success", data: undefined }
+    }
+
+    try {
+      await request(`/api/v1/reports/${id}`, {
+        method: "DELETE",
+      })
+      return {
+        code: 200,
+        message: "success",
+        data: undefined,
+      }
+    } catch (error) {
+      return handleApiError(error)
+    }
   },
 
   // 添加批注

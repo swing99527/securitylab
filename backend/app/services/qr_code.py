@@ -98,8 +98,9 @@ class QRCodeService:
             )
             
             # Generate public URL
-            # For local development: http://localhost:9000/bucket/path
-            url = f"http://{settings.MINIO_ENDPOINT}/{self.bucket_name}/{object_name}"
+            # Use MINIO_PUBLIC_URL for browser access, fallback to MINIO_ENDPOINT
+            public_host = settings.MINIO_PUBLIC_URL or f"http://{settings.MINIO_ENDPOINT}"
+            url = f"{public_host}/{self.bucket_name}/{object_name}"
             
             logger.info(f"Generated QR code for {sample_code}: {url}")
             return url

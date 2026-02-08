@@ -83,7 +83,7 @@ export function SampleDetail({ sampleId }: SampleDetailProps) {
       try {
         setLoading(true)
         const token = localStorage.getItem('token')
-        const response = await fetch(`http://localhost:8000/api/v1/samples/${sampleId}`, {
+        const response = await fetch(`/api/v1/samples/${sampleId}`, {
           headers: {
             'Authorization': `Bearer ${token}`
           }

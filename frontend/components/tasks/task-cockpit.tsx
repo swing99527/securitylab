@@ -63,7 +63,7 @@ export function TaskCockpit({
       if (!taskData || taskData.type !== 'vuln_scan') return
 
       try {
-        const response = await fetch(`http://localhost:8000/api/v1/tasks/${taskId}/vulnerabilities?page=1&page_size=1`)
+        const response = await fetch(`/api/v1/tasks/${taskId}/vulnerabilities?page=1&page_size=1`)
         const data = await response.json()
         if (data.code === 200 && data.data) {
           setVulnStats(data.data.statistics)

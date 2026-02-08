@@ -64,7 +64,7 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
         try {
             setSamplesLoading(true)
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:8000/api/v1/samples?project_id=${projectId}&page=1&page_size=100`, {
+            const response = await fetch(`/api/v1/samples?project_id=${projectId}&page=1&page_size=100`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -83,7 +83,7 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
         try {
             setTasksLoading(true)
             const token = localStorage.getItem('token')
-            const response = await fetch(`http://localhost:8000/api/v1/tasks?project_id=${projectId}&page=1&page_size=100`, {
+            const response = await fetch(`/api/v1/tasks?project_id=${projectId}&page=1&page_size=100`, {
                 headers: {
                     'Authorization': `Bearer ${token}`
                 }
@@ -126,9 +126,8 @@ export function ProjectDetail({ projectId }: ProjectDetailProps) {
             }
 
             // Step 3: Proceed with deletion
-            const apiBaseUrl = process.env.NEXT_PUBLIC_API_BASE_URL || 'http://localhost:8000'
             const token = localStorage.getItem('token')
-            const response = await fetch(`${apiBaseUrl}/api/v1/projects/${projectId}`, {
+            const response = await fetch(`/api/v1/projects/${projectId}`, {
                 method: 'DELETE',
                 headers: {
                     'Authorization': `Bearer ${token}`,

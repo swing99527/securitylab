@@ -83,8 +83,8 @@ export function SampleInbound() {
       // Get token from localStorage
       const token = localStorage.getItem("token")
 
-      // Create sample via direct API call
-      const response = await fetch("http://localhost:8000/api/v1/samples", {
+      // Create sample via API call through nginx proxy
+      const response = await fetch("/api/v1/samples", {
         method: "POST",
         headers: {
           "Content-Type": "application/json",

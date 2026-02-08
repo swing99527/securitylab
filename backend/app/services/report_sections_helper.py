@@ -153,3 +153,94 @@ def _generate_conclusion_section(report: 'Report', total_critical: int, total_hi
         html += f"<p>{report.certification_recommendation}</p>"
     
     return html
+
+
+async def _generate_fuzzing_section(report: 'Report', session: 'AsyncSession') -> str:
+    """
+    Generate fuzzing test results section dynamically from tasks
+    Returns: HTML content for fuzzing section
+    """
+    from sqlalchemy import select, and_
+    from app.models import Task
+    
+    # Fetch fuzzing tasks for this project
+    stmt = select(Task).where(
+        and_(
+            Task.project_id == report.project_id,
+            Task.type == 'fuzzing',
+            Task.status == 'completed'
+        )
+    )
+    result = await session.execute(stmt)
+    fuzzing_tasks = result.scalars().all()
+    
+    if not fuzzing_tasks:
+        return ""
+    
+    total_crashes = 0
+    html = """
+    <div class="section">
+        <h2 class="section-title">模糊测试结果</h2>
+        <div class="section-content">
+            <h3>模糊测试概述</h3>
+            <p>本次模糊测试针对目标系统进行了自动化异常输入测试，旨在发现潜在的崩溃、内存泄漏和异常行为。</p>
+            <table>
+                <thead>
+                    <tr>
+                        <th>测试目标</th>
+                        <th>测试用例数</th>
+                        <th>发现崩溃</th>
+                        <th>覆盖率</th>
+                        <th>状态</th>
+                    </tr>
+                </thead>
+                <tbody>
+    """
+    
+    for task in fuzzing_tasks:
+        results = task.results or {}
+        target = results.get('target_url', results.get('target', task.name))
+        test_cases = results.get('total_requests', results.get('total_test_cases', 0))
+        vulnerabilities = results.get('vulnerabilities_found', results.get('crashes_found', 0))
+        coverage = results.get('coverage_percent', 0) 
+        status = '已完成' if task.status == 'completed' else task.status
+        
+        total_crashes += vulnerabilities
+        
+        html += f"""
+                    <tr>
+                        <td>{target}</td>
+                        <td>{test_cases}</td>
+                        <td><strong>{vulnerabilities}</strong></td>
+                        <td>{coverage}%</td>
+                        <td>{status}</td>
+                    </tr>
+        """
+    
+    html += """
+                </tbody>
+            </table>
+    """
+    
+    # Add vulnerability details if any
+    if total_crashes > 0:
+        html += "<h4>发现的漏洞详情</h4>"
+        for task in fuzzing_tasks:
+            results = task.results or {}
+            # Try 'findings' first (actual field name), then 'vulnerabilities', then 'crash_details'
+            vulns = results.get('findings', results.get('vulnerabilities', results.get('crash_details', [])))
+            if vulns:
+                html += "<ul>"
+                for vuln in vulns[:10]:  # Limit to first 10
+                    vuln_type = vuln.get('type', 'Unknown')
+                    payload = vuln.get('payload', vuln.get('input', ''))[:100]  # Truncate long payloads
+                    severity = vuln.get('severity', '')
+                    html += f"<li><strong>{vuln_type}</strong> ({severity}): {payload}</li>"
+                html += "</ul>"
+    
+    html += """
+        </div>
+    </div>
+    """
+    
+    return html

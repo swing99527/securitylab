@@ -66,7 +66,7 @@ async def aggregate_report_data(
     metadata.update(get_product_info(target_sample, project.samples))
     
     # Testing organization (from config/default)
-    metadata["testing_organization"] = "汕头人工智能实验室 IoT安全检测中心"
+    metadata["testing_organization"] = "汕头人工智能实验室 玩具安全检测中心"
     
     # Test standards (from project)
     metadata.update(get_test_standards(project, template))

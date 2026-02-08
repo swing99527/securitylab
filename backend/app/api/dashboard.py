@@ -59,15 +59,15 @@ def get_dashboard_stats(db: Session = Depends(get_sync_db)):
     last_week = today - timedelta(days=7)
     two_weeks_ago = today - timedelta(days=14)
     
-    # Projects in progress
+    # Active projects (pending + in_progress)
     projects_in_progress = db.query(func.count(Project.id)).filter(
-        Project.status == "in_progress"
+        Project.status.in_(["pending", "in_progress"])
     ).scalar() or 0
     
-    # Projects trend (compare with last week)
+    # Active projects trend (compare with last week)
     projects_last_week = db.query(func.count(Project.id)).filter(
         and_(
-            Project.status == "in_progress",
+            Project.status.in_(["pending", "in_progress"]),
             Project.created_at < last_week
         )
     ).scalar() or 0

@@ -7,10 +7,19 @@ from sqlalchemy.orm import selectinload
 from typing import Optional
 from uuid import UUID
 from datetime import datetime
+import re
+import base64
+from pathlib import Path
 
 from app.models import Report, Project, User
 from app.schemas.reports import ReportCreate, ReportUpdate
 from app.services import report_data_aggregator
+from app.services.report_sections_helper import (
+    _generate_test_object_section,
+    _generate_standards_and_scope_section,
+    _generate_conclusion_section,
+    _generate_fuzzing_section
+)
 
 async def generate_report_code(session: AsyncSession, project_id: UUID) -> str:
     """
@@ -290,12 +299,12 @@ async def _aggregate_fuzzing_results(tasks: list) -> tuple[str, int]:
     """
     
     for task in fuzzing_tasks:
-        results = task.results
-        target = results.get('target', 'Unknown')
-        test_cases = results.get('total_test_cases', 0)
-        crashes = results.get('crashes_found', 0)
+        results = task.results or {}
+        target = results.get('target_url', results.get('target', 'Unknown'))
+        test_cases = results.get('total_requests', results.get('total_test_cases', 0))
+        crashes = results.get('vulnerabilities_found', results.get('crashes_found', 0))
         coverage = results.get('coverage_percent', 0)
-        status = results.get('status', 'completed')
+        status = 'completed' if task.status == 'completed' else task.status
         
         total_crashes += crashes
         
@@ -316,15 +325,17 @@ async def _aggregate_fuzzing_results(tasks: list) -> tuple[str, int]:
     
     # Add crash details if any
     if total_crashes > 0:
-        fuzzing_html += "<h4>发现的崩溃详情</h4>"
+        fuzzing_html += "<h4>发现的漏洞详情</h4>"
         for task in fuzzing_tasks:
-            crashes = task.results.get('crash_details', [])
-            if crashes:
+            results = task.results or {}
+            # Try 'findings' first (actual field name), then 'vulnerabilities', then 'crash_details'
+            vulns = results.get('findings', results.get('vulnerabilities', results.get('crash_details', [])))
+            if vulns:
                 fuzzing_html += "<ul>"
-                for crash in crashes:
-                    crash_type = crash.get('type', 'Unknown')
-                    crash_input = crash.get('input', '')[:100]  # Truncate long inputs
-                    fuzzing_html += f"<li><strong>{crash_type}</strong>: {crash_input}</li>"
+                for vuln in vulns[:10]:
+                    vuln_type = vuln.get('type', 'Unknown')
+                    payload = vuln.get('payload', vuln.get('input', ''))[:100]
+                    fuzzing_html += f"<li><strong>{vuln_type}</strong>: {payload}</li>"
                 fuzzing_html += "</ul>"
     
     return fuzzing_html, total_crashes
@@ -706,7 +717,7 @@ async def export_report_pdf(session: AsyncSession, report_id: UUID) -> bytes:
         raise ValueError(f"Report not found: {report_id}")
     
     # Build HTML document
-    html_content = _build_pdf_html(report)
+    html_content = await _build_pdf_html(report, session)
     css_content = _get_pdf_stylesheet()
     
     # Generate PDF using WeasyPrint
@@ -716,7 +727,120 @@ async def export_report_pdf(session: AsyncSession, report_id: UUID) -> bytes:
     return pdf_bytes
 
 
-def _build_pdf_html(report: Report) -> str:
+async def preview_report_html(session: AsyncSession, report_id: UUID) -> str:
+    """
+    Generate HTML preview of report for frontend display.
+    Returns the same HTML that would be used for PDF generation.
+    
+    Args:
+        session: Database session
+        report_id: Report UUID
+        
+    Returns:
+        HTML string for preview display
+        
+    Raises:
+        ValueError: If report not found
+    """
+    # Fetch report with relations
+    report = await get_report(session, report_id)
+    if not report:
+        raise ValueError(f"Report not found: {report_id}")
+    
+    # Build HTML document (same as PDF)
+    # Build HTML document (same as PDF)
+    html_content = await _build_pdf_html(report, session)
+    
+    # Embed local images for browser preview
+    html_content = _embed_local_images(html_content)
+    
+    css_content = _get_pdf_stylesheet()
+    
+    # Return complete HTML with embedded CSS for preview
+    preview_html = f"""
+    <!DOCTYPE html>
+    <html lang="zh-CN">
+    <head>
+        <meta charset="UTF-8">
+        <style>
+            {css_content}
+            /* Override for web preview - wider layout with !important */
+            body {{ 
+                max-width: 100% !important;
+                width: 100% !important;
+                margin: 0 !important;
+                padding: 20px 40px !important;
+                background: #f5f5f5 !important;
+                box-sizing: border-box !important;
+            }}
+            .cover-page {{
+                background: white !important;
+                padding: 50px 80px !important;
+                margin-bottom: 20px !important;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+                border-radius: 8px !important;
+                height: auto !important;
+                page-break-after: auto !important;
+            }}
+            .report-content {{
+                background: white !important;
+                padding: 40px 80px !important;
+                box-shadow: 0 2px 8px rgba(0,0,0,0.1) !important;
+                border-radius: 8px !important;
+            }}
+            .section {{
+                margin-bottom: 30px !important;
+            }}
+            .section-content {{
+                line-height: 1.8 !important;
+            }}
+            .page-break {{
+                height: 40px !important;
+                background: #f5f5f5 !important;
+                page-break-after: auto !important;
+            }}
+        </style>
+    </head>
+    {html_content.split('<body>')[1] if '<body>' in html_content else html_content}
+    """
+    
+    return preview_html
+
+
+def _embed_local_images(html: str) -> str:
+    """Replace local image paths with base64 data URIs for browser preview"""
+    def replace_match(match):
+        src = match.group(1)
+        # Check if it's a local file path (starts with /app or /tmp)
+        if src.startswith('/app/') or src.startswith('/tmp/'):
+            try:
+                file_path = Path(src)
+                if file_path.exists() and file_path.is_file():
+                    with open(file_path, "rb") as f:
+                        data = base64.b64encode(f.read()).decode('utf-8')
+                        
+                        # Determine mime type
+                        suffix = file_path.suffix.lower()
+                        mime_type = "image/png"  # Default
+                        if suffix in ['.jpg', '.jpeg']:
+                            mime_type = "image/jpeg"
+                        elif suffix == '.svg':
+                            mime_type = "image/svg+xml"
+                        elif suffix == '.gif':
+                            mime_type = "image/gif"
+                            
+                        return f'src="data:{mime_type};base64,{data}"'
+            except Exception as e:
+                # Log error but keep original path
+                print(f"Error embedding image {src}: {e}")
+                
+        return match.group(0)
+
+    # Regex for src="/path" - handles both single and double quotes
+    return re.sub(r'src=["\']([^"\']+)["\']', replace_match, html)
+
+
+async def _build_pdf_html(report: Report, session: AsyncSession) -> str:
     """Build complete HTML document for PDF generation"""
     
     project_name = report.project.name if report.project else "Unknown Project"
@@ -782,6 +906,11 @@ def _build_pdf_html(report: Report) -> str:
         </div>
         """
     
+    # 3.5 Fuzzing Results Section (dynamically fetched)
+    fuzzing_html = await _generate_fuzzing_section(report, session)
+    if fuzzing_html:
+        sections_html += fuzzing_html
+    
     # 4. Conclusion Section (if metadata exists)
     # Calculate totals from content for conclusion
     total_critical = 0
@@ -829,8 +958,8 @@ def _build_pdf_html(report: Report) -> str:
                     <p><strong>生成人:</strong> {author_name}</p>
                 </div>
                 <div class="logo">
-                    <h2>SecurityLab</h2>
-                    <p>IoT Security Testing Platform</p>
+                    <h2>汕头人工智能实验室</h2>
+                    <p>玩具安全测试中心</p>
                 </div>
             </div>
         </div>
@@ -845,7 +974,7 @@ def _build_pdf_html(report: Report) -> str:
         
         <!-- Footer (appears on every page) -->
         <div class="footer">
-            <p>SecurityLab - IoT Security Testing Platform | {report.code}</p>
+            <p>汕头人工智能实验室 玩具安全测试中心 | {report.code}</p>
         </div>
     </body>
     </html>
@@ -870,7 +999,7 @@ def _get_pdf_stylesheet() -> str:
     }
     
     body {
-        font-family: "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
+        font-family: "Noto Sans CJK SC", "Source Han Sans CN", "WenQuanYi Zen Hei", "WenQuanYi Micro Hei", "Microsoft YaHei", "DejaVu Sans", "Liberation Sans", Arial, sans-serif;
         font-size: 11pt;
         line-height: 1.6;
         color: #333;

@@ -8,6 +8,24 @@ RUN apt-get update && apt-get install -y \
     gcc \
     postgresql-client \
     curl \
+    # Security scanning tools
+    nmap \
+    binwalk \
+    # Binwalk dependencies for firmware extraction
+    mtd-utils \
+    gzip \
+    bzip2 \
+    tar \
+    arj \
+    lhasa \
+    p7zip \
+    p7zip-full \
+    cabextract \
+    cramfsswap \
+    squashfs-tools \
+    zlib1g-dev \
+    liblzma-dev \
+    liblzo2-dev \
     # WeasyPrint dependencies for PDF export
     libcairo2 \
     libpango-1.0-0 \
@@ -18,6 +36,10 @@ RUN apt-get update && apt-get install -y \
     # Fonts for better PDF rendering
     fonts-liberation \
     fonts-dejavu-core \
+    # Chinese fonts for CJK support
+    fonts-noto-cjk \
+    fonts-wqy-zenhei \
+    fonts-wqy-microhei \
     && rm -rf /var/lib/apt/lists/*
 
 # Install Poetry

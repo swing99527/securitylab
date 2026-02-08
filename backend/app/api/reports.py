@@ -434,3 +434,24 @@ async def export_report_pdf(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"PDF generation failed: {str(e)}"
         )
+
+
+@router.get("/{report_id}/preview/html")
+async def preview_report_html(
+    report_id: UUID,
+    current_user: User = Depends(get_current_user),
+    db: AsyncSession = Depends(get_db)
+):
+    """Get HTML preview of report (same content as PDF)"""
+    from fastapi.responses import HTMLResponse
+    
+    try:
+        html_content = await report_service.preview_report_html(db, report_id)
+        return HTMLResponse(content=html_content)
+    except ValueError as e:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=str(e))
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Preview generation failed: {str(e)}"
+        )

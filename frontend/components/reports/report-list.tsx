@@ -10,6 +10,17 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from "@/components/ui/dropdown-menu"
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog"
+import { useToast } from "@/components/ui/use-toast"
+import {
   Search,
   Filter,
   MoreHorizontal,
@@ -22,12 +33,13 @@ import {
   CheckCircle,
   XCircle,
   Loader2,
+  Trash2,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { CreateReportDialog } from "./create-report-dialog"
 import { reportApi } from "@/lib/api"
 
-const statusConfig = {
+const statusConfig: Record<string, { label: string; icon: any; color: string }> = {
   draft: { label: "草稿", icon: FileText, color: "bg-muted text-muted-foreground" },
   pending_review: { label: "待审核", icon: Clock, color: "bg-warning/10 text-warning" },
   approved: { label: "已通过", icon: CheckCircle, color: "bg-success/10 text-success" },
@@ -45,34 +57,60 @@ export function ReportList({ projectId }: ReportListProps = {}) {
   const [error, setError] = useState<string | null>(null)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<string>("all")
+  const [deleteId, setDeleteId] = useState<string | null>(null)
+  const { toast } = useToast()
+
+  const fetchReports = async () => {
+    setLoading(true)
+    try {
+      const response = await reportApi.getList({
+        page: 1,
+        pageSize: 50,
+        status: statusFilter === "all" ? undefined : statusFilter,
+        search: searchTerm || undefined,
+        projectId: projectId || undefined,
+      })
+      console.log("📄 Reports response:", response)
+
+      if (response.code === 200 && response.data) {
+        setReports(response.data.list || [])
+        setError(null)
+      } else {
+        setError("加载报告失败")
+      }
+    } catch (err) {
+      console.error("Failed to fetch reports:", err)
+      setError("加载报告时出错")
+    } finally {
+      setLoading(false)
+    }
+  }
 
   useEffect(() => {
-    async function fetchReports() {
-      try {
-        const response = await reportApi.getList({
-          page: 1,
-          pageSize: 50,
-          status: statusFilter === "all" ? undefined : statusFilter,
-          search: searchTerm || undefined,
-          projectId: projectId || undefined,
-        })
-        console.log("📄 Reports response:", response)
-
-        if (response.code === 200 && response.data) {
-          setReports(response.data.list || [])
-        } else {
-          setError("加载报告失败")
-        }
-      } catch (err) {
-        console.error("Failed to fetch reports:", err)
-        setError("加载报告时出错")
-      } finally {
-        setLoading(false)
-      }
-    }
-
     fetchReports()
   }, [statusFilter, searchTerm, projectId])
+
+  const handleDelete = async () => {
+    if (!deleteId) return
+
+    try {
+      await reportApi.delete(deleteId)
+      toast({
+        title: "报告已删除",
+        description: "报告已被永久删除",
+      })
+      fetchReports() // Refresh list
+    } catch (error) {
+      console.error("Failed to delete report:", error)
+      toast({
+        title: "删除失败",
+        description: "无法删除报告，请稍后重试",
+        variant: "destructive",
+      })
+    } finally {
+      setDeleteId(null)
+    }
+  }
 
   const filteredReports = reports
 
@@ -190,7 +228,7 @@ export function ReportList({ projectId }: ReportListProps = {}) {
           </TableHeader>
           <TableBody>
             {filteredReports.map((report) => {
-              const status = statusConfig[report.status]
+              const status = statusConfig[report.status] || statusConfig.draft
               const StatusIcon = status.icon
               return (
                 <TableRow key={report.id}>
@@ -240,6 +278,13 @@ export function ReportList({ projectId }: ReportListProps = {}) {
                             提交审核
                           </DropdownMenuItem>
                         )}
+                        <DropdownMenuItem
+                          className="text-destructive focus:text-destructive"
+                          onClick={() => setDeleteId(report.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          删除
+                        </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
                   </TableCell>
@@ -249,6 +294,23 @@ export function ReportList({ projectId }: ReportListProps = {}) {
           </TableBody>
         </Table>
       </Card>
+
+      <AlertDialog open={!!deleteId} onOpenChange={(open) => !open && setDeleteId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>确认删除报告？</AlertDialogTitle>
+            <AlertDialogDescription>
+              此操作无法撤销。报告将被永久删除。
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>取消</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              删除
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   )
 }
